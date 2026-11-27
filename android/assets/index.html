@@ -2870,5 +2870,22 @@ function init() {
 }
 init();
 </script>
+<script>
+(function(){
+  var KEY='qlz_bgm', pref=localStorage.getItem(KEY);
+  var a=new Audio(); a.loop=true; a.volume=0.45; a.preload='none';
+  a.src=(location.hostname==='qlz.local')?'bgm.mp3':'assets/bgm.mp3';
+  var on=(pref!=='0');
+  var b=document.createElement('button'); b.type='button'; b.textContent='♪'; b.title='背景音乐';
+  b.style.cssText='position:fixed;left:14px;bottom:78px;z-index:70;width:34px;height:34px;border-radius:50%;border:1px solid rgba(47,93,80,.35);background:rgba(255,255,255,.86);color:#2f5d50;font-size:15px;line-height:32px;text-align:center;box-shadow:0 4px 10px rgba(0,0,0,.08);-webkit-tap-highlight-color:transparent';
+  document.body.appendChild(b);
+  function sync(){ b.style.opacity=on?'1':'.4'; b.style.textDecoration=on?'none':'line-through'; }
+  function start(){ if(!on) return; var p=a.play(); if(p&&p.catch) p.catch(function(){}); }
+  b.onclick=function(){ on=!on; localStorage.setItem(KEY,on?'1':'0'); sync(); if(on) start(); else a.pause(); };
+  sync();
+  document.addEventListener('touchstart',start,{once:true,passive:true});
+  document.addEventListener('click',start,{once:true});
+})();
+</script>
 </body>
 </html>
