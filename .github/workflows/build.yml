@@ -20,7 +20,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      
 
       - name: 安装构建工具
         run: sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
