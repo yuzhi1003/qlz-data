@@ -315,6 +315,8 @@ main{padding:14px 14px 84px}
 .chat-body{flex:1;overflow-y:auto;padding:14px 12px 8px;display:flex;flex-direction:column;gap:10px;background-size:cover;background-position:center}
 .msg{display:flex;gap:8px;align-items:flex-start;max-width:82%}
 .msg img{width:30px;height:30px;border-radius:8px;flex:none}
+.msg .chat-img{width:auto;height:auto;max-width:min(74vw,300px);max-height:min(48vh,360px);border-radius:12px;display:block;object-fit:contain;cursor:zoom-in}
+.msg .bubble.img-b{padding:4px;background:rgba(47,93,80,.14)}
 .msg .bubble{background:rgba(255,255,255,.94);padding:9px 12px;border-radius:4px 12px 12px 12px;font-size:14px;line-height:1.65;
   word-break:break-word;box-shadow:0 2px 8px rgba(74,58,38,.08);border:1px solid rgba(255,255,255,.6)}
 .msg .btime{font-size:10px;color:var(--sub);margin-top:4px;text-align:left}
@@ -2214,6 +2216,12 @@ function delPost(id) {
     saveState(); renderMoments(); toast('已删除');
   }, '删除');
 }
+function viewMedia(src){
+  openModal(`<div style="margin:-14px -18px;background:#111;border-radius:12px;overflow:hidden">
+    <img src="${src}" style="width:100%;display:block" onclick="closeModal()">
+    </div>
+    <div class="row mt10"><button class="btn btn-ghost" onclick="closeModal()">收起</button></div>`);
+}
 function viewImage(id) {
   const p = state.posts.find(x => x.id === id); if (!p) return;
   openModal(`<div style="-webkit-overflow-scrolling:touch">${p.imgs.map(s => `<img src="${s}" style="width:100%;border-radius:10px;margin-bottom:8px">`).join('')}</div>
@@ -2757,11 +2765,12 @@ function renderChat() {
     const u = userById(msg.from) || (msg.nm ? { name: msg.nm } : { name: '故人' });
     const who = (!mine && isGroup) ? `<div class="who">${esc(u.name)}</div>` : '';
     const body = msg.kind === 'img'
-      ? `<img src="${msg.text}" style="max-width:180px;border-radius:10px;display:block">`
+      ? `<img class="chat-img" src="${msg.text}" onclick="viewMedia('${esc(msg.text).replace(/'/g,'%27')}')">`
       : esc(msg.text);
+    const bcls = msg.kind === 'img' ? 'bubble img-b' : 'bubble';
     html += `<div class="msg ${mine ? 'me' : ''}">
       <img src="${avatarOf(u)}">
-      <div>${who}<div class="bubble">${body}</div><div class="btime">${fmtTime(msg.time)}</div></div></div>`;
+      <div>${who}<div class="${bcls}">${body}</div><div class="btime">${fmtTime(msg.time)}</div></div></div>`;
   });
   box.innerHTML = html;
   box.scrollTop = box.scrollHeight;
