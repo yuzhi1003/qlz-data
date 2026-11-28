@@ -1108,10 +1108,14 @@ async function ghRead(cond) {
   if (j.content) {
     try { doc = JSON.parse(b64dec(j.content)); } catch (e) { doc = null; }
   }
-  if (!doc && j.download_url) {
+  if (!doc && j.sha) {
+    // 超过 1MB 的文件，改走 Git Blobs 接口按 sha 取原文（上限 100MB，且允许跨域）
     try {
-      const raw = await fetch(j.download_url + (j.download_url.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store', headers: { 'Accept': 'application/vnd.github.raw' } });
-      if (raw.ok) doc = JSON.parse(await raw.text());
+      const br = await ghFetch(GHAPI + '/repos/' + CLOUD.owner + '/' + CLOUD.repo + '/git/blobs/' + j.sha, () => ({ headers: ghH(), cache: 'no-store' }));
+      if (br.ok) {
+        const bj = await br.json();
+        if (bj && bj.content) doc = JSON.parse(b64dec(bj.content));
+      }
     } catch (e) { doc = null; }
   }
   if (!doc) throw new Error('云端读取为空（文件 ' + (j.size || '?') + ' 字节，状态 ' + r.status + '）');
