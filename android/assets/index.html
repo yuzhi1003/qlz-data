@@ -315,7 +315,14 @@ main{padding:14px 14px 84px}
 .chat-body{flex:1;overflow-y:auto;padding:14px 12px 8px;display:flex;flex-direction:column;gap:10px;background-size:cover;background-position:center}
 .msg{display:flex;gap:8px;align-items:flex-start;max-width:82%}
 .msg img{width:30px;height:30px;border-radius:8px;flex:none}
-.msg .chat-img{width:auto;height:auto;max-width:min(74vw,300px);max-height:min(48vh,360px);border-radius:12px;display:block;object-fit:contain;cursor:zoom-in}
+.nav-badge{position:absolute;top:3px;left:50%;margin-left:7px;min-width:15px;height:15px;padding:0 3px;border-radius:4px;
+  background:linear-gradient(170deg,#fbf5e6,#f2e8d2);color:#35695b;font-size:10px;line-height:15px;text-align:center;
+  letter-spacing:0;font-weight:600;box-shadow:0 1px 3px rgba(47,93,80,.22);border:.5px solid rgba(53,105,91,.55)}
+.nav-badge.no-num{min-width:7px;width:7px;height:7px;padding:0;border-radius:2px;top:8px}
+.unread-pill{flex:none;min-height:18px;padding:0 6px;border-radius:3px;background:rgba(47,93,80,.09);
+  color:#35695b;border:.5px solid rgba(47,93,80,.30);font-size:11px;display:inline-flex;align-items:center;
+  justify-content:center;margin-right:5px;letter-spacing:.5px}
+.chat-img{width:auto;height:auto;max-width:min(74vw,300px);max-height:min(48vh,360px);border-radius:12px;display:block;object-fit:contain;cursor:zoom-in}
 .msg .bubble.img-b{padding:4px;background:rgba(47,93,80,.14)}
 .msg .bubble{background:rgba(255,255,255,.94);padding:9px 12px;border-radius:4px 12px 12px 12px;font-size:14px;line-height:1.65;
   word-break:break-word;box-shadow:0 2px 8px rgba(74,58,38,.08);border:1px solid rgba(255,255,255,.6)}
@@ -1723,6 +1730,11 @@ async function register(name, avatar) {
 /* ---------- 导航 ---------- */
 let activeTab = 'tools';
 function switchTab(tab) {
+  if (tab === 'friends') {
+    const rm = readMap(); rm['req'] = Date.now();
+    try { localStorage.setItem('qlz_read', JSON.stringify(rm)); } catch (e) { }
+    setTimeout(refreshUnreadUI, 0);
+  }
   activeTab = tab;
   $$('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + tab));
   $$('.tab-item').forEach(n => n.classList.toggle('active', n.dataset.tab === tab));
@@ -1769,13 +1781,11 @@ let subTab = 'rules';
 
 function renderAll() {
   if (!state.me) return;
+  if (chatCtx) markRead(chatCtx.type === 'dm' ? 'dm' : 'group', chatCtx.id);
   renderTools(); renderDaily(); renderMoments(); renderPoem(); renderFriends(); renderDrawer();
-  const pend = state.reqs.filter(r => r.to === state.me && r.status === 'pending').length;
+  refreshUnreadUI();
   $$('.tab-item').forEach(n => {
     const old = n.querySelector('.nav-dot'); if (old) old.remove();
-    if (n.dataset.tab === 'friends' && pend > 0) {
-      const d = document.createElement('div'); d.className = 'nav-dot'; n.appendChild(d);
-    }
   });
   const u = me();
   $('#topSub').textContent = `${ROLE[u.role]} · ${u.name}`;
@@ -2294,7 +2304,7 @@ function renderPoem() {
 }
 
 function clubIds(g){
-  const ids = new Set((g && g.members) || []);
+  const ids = new Set();
   (state.users || []).forEach(u => { if (u && u.id) ids.add(u.id); });
   return Array.from(ids);
 }
@@ -2314,11 +2324,7 @@ function renderFriends() {
   const outgoing = state.reqs.filter(r => r.from === m.id && r.status !== 'pending').slice(0, 6);
   const sentPending = state.reqs.filter(r => r.from === m.id && r.status === 'pending');
   const friends = m.friends.map(id => userById(id)).filter(Boolean);
-  const mainG = state.groups.find(g => g.isMain);
-  const seenIds = new Set(state.users.map(u => u.id));
-  const ghosts = ((mainG && mainG.members) || []).filter(id => !seenIds.has(id))
-    .map(id => ({ id, name: '故人', role: 'member', sig: '资料未同步', ghost: true }));
-  const others = state.users.filter(u => u.id !== m.id).concat(ghosts);
+  const others = state.users.filter(u => u.id !== m.id);
 
   let html = `<div class="card" style="padding:11px 14px;background:rgba(255,255,255,.7)">
     <p class="hint">← 在本页向左滑动，可打开「个人设置」（头像、签名、主页背景、音乐、聊天背景与启动画面，启动画面可自定义为噜噜视频，桀桀桀）。</p>
@@ -2330,6 +2336,7 @@ function renderFriends() {
         <div class="avatar" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#35695b,#8aa79b);color:#fdf6e6;font-size:15px">群</div>
         <div class="f-main"><div class="f-name">${esc(g.name)}${g.isMain ? ' <span class="badge badge-role">大群聊</span>' : ''}</div>
         <div class="f-sub">${clubCount(g)} 人 · ${(state.groupMsgs[g.id] || []).length} 条消息</div></div>
+        ${unreadOf('group', g.id) ? `<span class="unread-pill">${unreadOf('group', g.id) > 99 ? '99+' : unreadOf('group', g.id)}</span>` : ''}
         <span class="chev">›</span></div>`).join('')}
     <button class="btn btn-ghost mt8" onclick="createGroup()">＋ 新建群聊，拉好友入群</button>
   </div>`;
@@ -2353,6 +2360,7 @@ function renderFriends() {
       <img src="${avatarOf(u)}">
       <div class="f-main"><div class="f-name">${esc(u.name)}${isAdmin(u) ? ' <span class="badge badge-role">' + ROLE[u.role] + '</span>' : ''}</div>
       <div class="f-sub">${esc(u.sig || '')}</div></div>
+      ${unreadOf('dm', u.id) ? `<span class="unread-pill">${unreadOf('dm', u.id) > 99 ? '99+' : unreadOf('dm', u.id)}</span>` : ''}
       <button class="btn-mini btn-ghost" style="width:auto;padding:6px 10px" onclick="event.stopPropagation();openDM('${u.id}')">私聊</button>
       <button class="btn-mini btn-ghost" style="width:auto;padding:6px 10px;color:var(--cinnabar)" onclick="event.stopPropagation();removeFriend('${u.id}')">解除</button></div>`;
   });
@@ -2504,6 +2512,7 @@ function renderDrawer() {
     <div class="set-line"><div class="lbl">云同步</div><div class="val">${(typeof cloudOn === 'function' && cloudOn()) ? (CLOUD.p === 'gh' ? 'GitHub · ' + CLOUD.owner + '/' + CLOUD.repo : '已配置') : '未配置（本机）'}</div><button class="act" onclick="cloudConfig()">配置</button></div>
     <div class="set-line"><div class="lbl">同步状态</div><div class="val">${DB.ready ? '已连云端' : (cloudOn() ? '待重连' + (DB.err ? '（' + esc(String(DB.err).slice(0, 18)) + '）' : '') : '本机模式')} · 在册 ${(state.users || []).length} 人</div><button class="act" onclick="forceSync()">立即同步</button></div>
     <div class="set-line"><div class="lbl">密钥</div><div class="val">${CLOUD.token ? '已存 · 末四位 ' + esc(String(CLOUD.token).slice(-4)) + ' · ' + CLOUD.token.length + ' 位' : '未填写'}</div><button class="act" onclick="cloudConfig()">重填</button></div>
+    <div class="set-line"><div class="lbl">数据备份</div><div class="val">导出整份数据为 JSON</div><button class="act" onclick="exportBackup()">导出</button></div>
     <div class="set-line"><div class="lbl">页面缓存</div><div class="val">${localStorage.getItem('qlz_cache_t') ? '上次清理 ' + localStorage.getItem('qlz_cache_t') : '更新后仍是旧页时可清'}</div><button class="act" onclick="clearCache()">清理</button></div>
     <p class="hint" style="margin-top:8px">只清页面缓存，不动账号、动态与本机记录；清完自动重载最新网页。</p>
   </div>
@@ -2744,6 +2753,110 @@ function dismissAdmin(id) {
   }, '卸任');
 }
 
+/* ---------- 未读 ---------- */
+function readMap() { try { return JSON.parse(localStorage.getItem('qlz_read') || '{}'); } catch (e) { return {}; } }
+function convKey(kind, id) { return kind === 'dm' ? 'd:' + dmKey(state.me, id) : 'g:' + id; }
+function convMsgs(kind, id) {
+  if (kind === 'dm') return (state.dm[dmKey(state.me, id)] || []);
+  return ((state.groupMsgs || {})[id] || []);
+}
+function unreadOf(kind, id) {
+  const rm = readMap(), k = convKey(kind, id);
+  if (rm[k] == null) {   // 本机第一次见到这个会话：从此刻起算，历史不算未读
+    rm[k] = Date.now();
+    try { localStorage.setItem('qlz_read', JSON.stringify(rm)); } catch (e) { }
+    return 0;
+  }
+  const seen = rm[k];
+  return convMsgs(kind, id).filter(m => m.from && m.from !== state.me && !m.type
+    && (m.time || 0) > seen).length;
+}
+function markRead(kind, id) {
+  const rm = readMap(), k = convKey(kind, id), now = Date.now();
+  if (rm[k] && now - rm[k] < 2500) { refreshUnreadUI(); return; }
+  rm[k] = now;
+  try { localStorage.setItem('qlz_read', JSON.stringify(rm)); } catch (e) { }
+  refreshUnreadUI();
+}
+function unreadTotal() {
+  if (!state.me) return 0;
+  let n = 0;
+  (state.groups || []).forEach(g => { n += unreadOf('group', g.id); });
+  ((me() && me().friends) || []).forEach(fid => { if (userById(fid)) n += unreadOf('dm', fid); });
+  const rm = readMap();
+  const seenReq = rm['req'] || 0;
+  n += (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending' && (r.time || 0) > seenReq).length;
+  return n;
+}
+function unreadChat() {
+  if (!state.me) return 0;
+  let n = 0;
+  (state.groups || []).forEach(g => { n += unreadOf('group', g.id); });
+  ((me() && me().friends) || []).forEach(fid => { if (userById(fid)) n += unreadOf('dm', fid); });
+  return n;
+}
+function exportBackup() {
+  try {
+    const doc = snapshot();
+    doc.me = state.me;
+    doc.exportedAt = new Date().toISOString();
+    doc.wipeV = state.wipeV || 0;
+    const text = JSON.stringify(doc);
+    const d = new Date();
+    const name = '清平乐备份-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2)
+      + '-' + ('0' + d.getHours()).slice(-2) + ('0' + d.getMinutes()).slice(-2) + '.json';
+    if (window.QLZNative && QLZNative.saveBackup) {
+      QLZNative.saveBackup(name, text);
+      toast('备份已交给手机保存');
+      return;
+    }
+    const blob = new Blob([text], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+    toast('备份文件已生成：' + name);
+  } catch (e) { toast('导出失败：' + (e.message || '未知')); }
+}
+
+let lastNotifyN = 0;
+function maybeNotifyNative() {
+  try {
+    if (!window.QLZNative || !QLZNative.notifyMsg) return;
+    if (document.visibilityState === 'visible') { lastNotifyN = 0; return; }
+    const n = unreadChat();
+    if (!n || n <= lastNotifyN) { if (!n) lastNotifyN = 0; return; }
+    let who = '', text = '';
+    const g = state.groups.find(x => x.isMain) || state.groups[0];
+    if (g) {
+      const ms = (state.groupMsgs || {})[g.id] || [];
+      const last = ms.filter(m => m.from && m.from !== state.me && !m.type).slice(-1)[0];
+      if (last) {
+        const u = userById(last.from) || { name: '故人' };
+        who = u.name; text = last.kind === 'img' ? '[图片]' : String(last.text || '').slice(0, 40);
+      }
+    }
+    QLZNative.notifyMsg('清平乐 · 醉清欢',
+      (who ? who + '：' : '') + (text || '有 ' + n + ' 条新消息'), n);
+    lastNotifyN = n;
+  } catch (e) { }
+}
+
+function refreshUnreadUI() {
+  if (!state.me) return;
+  maybeNotifyNative();
+  const n = unreadTotal();
+  const tab = $('.tab-item[data-tab="friends"]');
+  if (tab) {
+    let b = tab.querySelector('.nav-badge');
+    if (!b) { b = document.createElement('div'); b.className = 'nav-badge'; tab.appendChild(b); }
+    b.textContent = n > 99 ? '99+' : n;
+    b.style.display = n > 0 ? 'flex' : 'none';
+  }
+  document.title = (n > 0 ? '(' + (n > 99 ? '99+' : n) + ') ' : '') + '清平乐 · 醉清欢';
+}
+
 /* ---------- 聊天 ---------- */
 let chatCtx = null;
 let chatAudio = null;
@@ -2754,6 +2867,7 @@ function openDM(id) {
   if (isBlocked(id)) return toast('你已与「' + u.name + '」解除好友，重新申请通过后方可再聊。');
   if (!isFriend(state.me, id)) return toast('你们还不是好友，先在主页提交好友申请。');
   chatCtx = { type: 'dm', id };
+  markRead('dm', id);
   $('#chatName').textContent = u.name;
   $('#chatSub').textContent = (u.role !== 'member' ? ROLE[u.role] + ' · ' : '') + (u.sig || '');
   $('#chatView').classList.add('show');
@@ -2762,6 +2876,7 @@ function openDM(id) {
 function openGroup(gid) {
   const g = state.groups.find(x => x.id === gid); if (!g) return;
   chatCtx = { type: 'group', id: gid };
+  markRead('group', gid);
   $('#chatName').textContent = g.name;
   if (g.isMain) {
     const have = new Set(g.members || []);
@@ -2812,6 +2927,7 @@ function chatMessages() {
 }
 function renderChat() {
   if (!chatCtx) return;
+  markRead(chatCtx.type === 'dm' ? 'dm' : 'group', chatCtx.id);
   const list = chatMessages();
   const box = $('#chatBody');
   const isGroup = chatCtx.type === 'group';
@@ -2905,7 +3021,7 @@ function viewMembers(gid) {
   const g = state.groups.find(x => x.id === gid); if (!g) return;
   openModal(`<h3>${esc(g.name)} · 成员</h3>
     ${clubIds(g).map(id => {
-    const u = userById(id) || { name: '故人', sig: '资料未同步' }; return `<div class="friend-row"><img src="${avatarOf(u)}">
+    const u = userById(id) || { name: '故人', sig: '' }; return `<div class="friend-row"><img src="${avatarOf(u)}">
         <div class="f-main"><div class="f-name">${esc(u.name || '')}${isAdmin(u) ? ' <span class="badge badge-role">' + ROLE[u.role] + '</span>' : ''}</div>
         <div class="f-sub">${esc(u.sig || '')}</div></div></div>`;
   }).join('')}
