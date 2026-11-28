@@ -50,11 +50,15 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 Uri u = r.getUrl();
+                String scheme = u.getScheme() == null ? "" : u.getScheme();
                 String host = u.getHost() == null ? "" : u.getHost();
-                if (host.equals("qlz.local")) return false;
-                if (u.getScheme().startsWith("http")) return false;
-                try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception e) { }
-                return true;
+                if ("qlz.local".equals(host)) return false;
+                if ("yuzhi1003.github.io".equals(host)) return false;
+                if (scheme.startsWith("http") || scheme.startsWith("mailto") || scheme.startsWith("tel")) {
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception e) { }
+                    return true;
+                }
+                return false;
             }
 
             @Override
@@ -106,6 +110,13 @@ public class MainActivity extends Activity {
             }
         });
 
+        web.setDownloadListener(new android.webkit.DownloadListener() {
+            @Override
+            public void onDownloadStart(String url, String ua, String cd, String mime, long len) {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception e) { }
+            }
+        });
+
         web.loadUrl(LIVE);
     }
 
@@ -130,24 +141,29 @@ public class MainActivity extends Activity {
         super.onActivityResult(req, res, data);
     }
 
+    private void handleBack() {
+        if (web == null) { finish(); return; }
+        web.evaluateJavascript(
+            "(function(){try{return (typeof window.qlzBack==='function' && window.qlzBack())?'1':'0';}catch(err){return '0';}})()",
+            new ValueCallback<String>() {
+                @Override
+                public void onReceiveValue(String value) {
+                    boolean handled = value != null && value.indexOf('1') > -1;
+                    if (handled) return;
+                    if (web != null && web.canGoBack()) web.goBack();
+                    else finish();
+                }
+            });
+    }
+
     @Override
     public boolean onKeyDown(int code, KeyEvent e) {
-        if (code == KeyEvent.KEYCODE_BACK && web != null) {
-            web.evaluateJavascript(
-                "(function(){try{return (typeof window.qlzBack==='function' && window.qlzBack())?'1':'0';}catch(err){return '0';}})()",
-                new ValueCallback<String>() {
-                    @Override
-                    public void onReceiveValue(String value) {
-                        boolean handled = value != null && value.indexOf('1') > -1;
-                        if (handled) return;
-                        if (web.canGoBack()) web.goBack();
-                        else finish();
-                    }
-                });
-            return true;
-        }
+        if (code == KeyEvent.KEYCODE_BACK) { handleBack(); return true; }
         return super.onKeyDown(code, e);
     }
+
+    @Override
+    public void onBackPressed() { handleBack(); }
 
     @Override
     protected void onDestroy() {
