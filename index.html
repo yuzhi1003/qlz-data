@@ -2286,6 +2286,12 @@ function renderPoem() {
   $('#page-poem').innerHTML = html;
 }
 
+function clubIds(g){
+  const ids = new Set((g && g.members) || []);
+  (state.users || []).forEach(u => { if (u && u.id) ids.add(u.id); });
+  return Array.from(ids);
+}
+function clubCount(g){ return clubIds(g).length; }
 /* ---------- 好友 ---------- */
 function isFriend(a, b) { const u = userById(a); return !!u && u.friends.includes(b); }
 function addFriends(a, b) {
@@ -2316,7 +2322,7 @@ function renderFriends() {
     ${state.groups.map(g => `<div class="friend-row" onclick="openGroup('${g.id}')">
         <div class="avatar" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#35695b,#8aa79b);color:#fdf6e6;font-size:15px">群</div>
         <div class="f-main"><div class="f-name">${esc(g.name)}${g.isMain ? ' <span class="badge badge-role">大群聊</span>' : ''}</div>
-        <div class="f-sub">${g.members.length} 人 · ${(state.groupMsgs[g.id] || []).length} 条消息</div></div>
+        <div class="f-sub">${clubCount(g)} 人 · ${(state.groupMsgs[g.id] || []).length} 条消息</div></div>
         <span class="chev">›</span></div>`).join('')}
     <button class="btn btn-ghost mt8" onclick="createGroup()">＋ 新建群聊，拉好友入群</button>
   </div>`;
@@ -2489,6 +2495,7 @@ function renderDrawer() {
   <div class="set-group">
     <h4>云端</h4>
     <div class="set-line"><div class="lbl">云同步</div><div class="val">${(typeof cloudOn === 'function' && cloudOn()) ? (CLOUD.p === 'gh' ? 'GitHub · ' + CLOUD.owner + '/' + CLOUD.repo : '已配置') : '未配置（本机）'}</div><button class="act" onclick="cloudConfig()">配置</button></div>
+    <div class="set-line"><div class="lbl">同步状态</div><div class="val">${DB.ready ? '已连云端' : '本机模式'} · 在册 ${(state.users || []).length} 人</div><button class="act" onclick="forceSync()">立即同步</button></div>
     <div class="set-line"><div class="lbl">页面缓存</div><div class="val">${localStorage.getItem('qlz_cache_t') ? '上次清理 ' + localStorage.getItem('qlz_cache_t') : '更新后仍是旧页时可清'}</div><button class="act" onclick="clearCache()">清理</button></div>
     <p class="hint" style="margin-top:8px">只清页面缓存，不动账号、动态与本机记录；清完自动重载最新网页。</p>
   </div>
@@ -2512,6 +2519,16 @@ function renderDrawer() {
     <button class="btn btn-ghost mt12" onclick="logout()" style="color:var(--cinnabar)">退出登录</button>
   </div>
   <p class="hint" style="text-align:center;margin-top:8px">清平乐•醉清欢 · 本地数据版</p>`;
+}
+async function forceSync() {
+  if (!DB.ready) return toast('云端未连接：先在「配置」里填令牌');
+  toast('正在拉取云端…');
+  try {
+    if (CLOUD.p === 'gh') await ghPoll(true); else await pollOnce(true);
+    renderAll();
+    toast('已同步 · 在册 ' + (state.users || []).length + ' 人');
+    renderDrawer();
+  } catch (e) { toast('同步失败：' + (e.message || '网络')); }
 }
 function openDrawer() {
   renderDrawer();
@@ -2733,7 +2750,13 @@ function openGroup(gid) {
   const g = state.groups.find(x => x.id === gid); if (!g) return;
   chatCtx = { type: 'group', id: gid };
   $('#chatName').textContent = g.name;
-  $('#chatSub').textContent = g.members.length + ' 人 · 群聊';
+  if (g.isMain) {
+    const have = new Set(g.members || []);
+    let changed = false;
+    (state.users || []).forEach(u => { if (u && u.id && !have.has(u.id)) { have.add(u.id); changed = true; } });
+    if (changed) { g.members = Array.from(have); try { saveState(); } catch (e) { } }
+  }
+  $('#chatSub').textContent = clubCount(g) + ' 人 · 群聊';
   $('#chatView').classList.add('show');
   applyChatStyle(); renderChat();
 }
@@ -2822,7 +2845,7 @@ function chatMore() {
   }
   const g = state.groups.find(x => x.id === chatCtx.id); if (!g) return;
   openSheet(`<div class="sheet-head"><div class="avatar" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#35695b,#8aa79b);color:#fdf6e6">群</div>
-      <div><b>${esc(g.name)}</b><small>${g.members.length} 人</small></div></div>
+      <div><b>${esc(g.name)}</b><small>${clubCount(g)} 人</small></div></div>
     <div class="sheet-item" onclick="closeSheet();renameGroup('${g.id}')">修改群名称</div>
     <div class="sheet-item" onclick="closeSheet();inviteGroup('${g.id}')">拉好友入群</div>
     <div class="sheet-item" onclick="closeSheet();viewMembers('${g.id}')">查看成员名单</div>
@@ -2861,14 +2884,14 @@ function inviteGroup(gid) {
       state.groupMsgs[gid].push({ id: uid('m'), type: 'sys', text: (userById(id) || {}).name + ' 被拉入了群聊', time: Date.now() });
     });
     saveState(); closeModal(); renderFriends();
-    if (chatCtx && chatCtx.type === 'group' && chatCtx.id === gid) { $('#chatSub').textContent = g.members.length + ' 人 · 群聊'; renderChat(); }
+    if (chatCtx && chatCtx.type === 'group' && chatCtx.id === gid) { $('#chatSub').textContent = clubCount(g) + ' 人 · 群聊'; renderChat(); }
     toast('已拉入 ' + ids.length + ' 位好友');
   };
 }
 function viewMembers(gid) {
   const g = state.groups.find(x => x.id === gid); if (!g) return;
   openModal(`<h3>${esc(g.name)} · 成员</h3>
-    ${g.members.map(id => {
+    ${clubIds(g).map(id => {
     const u = userById(id) || { name: '故人', sig: '资料未同步' }; return `<div class="friend-row"><img src="${avatarOf(u)}">
         <div class="f-main"><div class="f-name">${esc(u.name || '')}${isAdmin(u) ? ' <span class="badge badge-role">' + ROLE[u.role] + '</span>' : ''}</div>
         <div class="f-sub">${esc(u.sig || '')}</div></div></div>`;
@@ -2904,7 +2927,7 @@ function openMsgList() {
   openSheet(`<div class="sheet-head" style="justify-content:center"><b>消息</b></div>
     ${groups.map(g => `<div class="sheet-item" style="text-align:left;display:flex;align-items:center;gap:10px" onclick="closeSheet();openGroup('${g.id}')">
       <span style="font-size:16px">群</span><div style="flex:1"><b style="font-size:13.5px">${esc(g.name)}</b>
-      <div class="meta">${g.members.length} 人</div></div><span class="chev">›</span></div>`).join('')}
+      <div class="meta">${clubCount(g)} 人</div></div><span class="chev">›</span></div>`).join('')}
     ${friends.map(u => {
     const m = last(dmKey(state.me, u.id));
     return `<div class="sheet-item" style="text-align:left;display:flex;align-items:center;gap:10px" onclick="closeSheet();openDM('${u.id}')">
