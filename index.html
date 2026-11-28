@@ -1730,6 +1730,11 @@ async function register(name, avatar) {
 /* ---------- 导航 ---------- */
 let activeTab = 'tools';
 function switchTab(tab) {
+  if (tab === 'friends') {
+    const rm = readMap(); rm['req'] = Date.now();
+    try { localStorage.setItem('qlz_read', JSON.stringify(rm)); } catch (e) { }
+    setTimeout(refreshUnreadUI, 0);
+  }
   activeTab = tab;
   $$('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + tab));
   $$('.tab-item').forEach(n => n.classList.toggle('active', n.dataset.tab === tab));
@@ -1779,12 +1784,8 @@ function renderAll() {
   if (chatCtx) markRead(chatCtx.type === 'dm' ? 'dm' : 'group', chatCtx.id);
   renderTools(); renderDaily(); renderMoments(); renderPoem(); renderFriends(); renderDrawer();
   refreshUnreadUI();
-  const pend = state.reqs.filter(r => r.to === state.me && r.status === 'pending').length;
   $$('.tab-item').forEach(n => {
     const old = n.querySelector('.nav-dot'); if (old) old.remove();
-    if (n.dataset.tab === 'friends' && pend > 0) {
-      const d = document.createElement('div'); d.className = 'nav-dot'; n.appendChild(d);
-    }
   });
   const u = me();
   $('#topSub').textContent = `${ROLE[u.role]} · ${u.name}`;
@@ -2303,7 +2304,7 @@ function renderPoem() {
 }
 
 function clubIds(g){
-  const ids = new Set((g && g.members) || []);
+  const ids = new Set();
   (state.users || []).forEach(u => { if (u && u.id) ids.add(u.id); });
   return Array.from(ids);
 }
@@ -2323,11 +2324,7 @@ function renderFriends() {
   const outgoing = state.reqs.filter(r => r.from === m.id && r.status !== 'pending').slice(0, 6);
   const sentPending = state.reqs.filter(r => r.from === m.id && r.status === 'pending');
   const friends = m.friends.map(id => userById(id)).filter(Boolean);
-  const mainG = state.groups.find(g => g.isMain);
-  const seenIds = new Set(state.users.map(u => u.id));
-  const ghosts = ((mainG && mainG.members) || []).filter(id => !seenIds.has(id))
-    .map(id => ({ id, name: '故人', role: 'member', sig: '资料未同步', ghost: true }));
-  const others = state.users.filter(u => u.id !== m.id).concat(ghosts);
+  const others = state.users.filter(u => u.id !== m.id);
 
   let html = `<div class="card" style="padding:11px 14px;background:rgba(255,255,255,.7)">
     <p class="hint">← 在本页向左滑动，可打开「个人设置」（头像、签名、主页背景、音乐、聊天背景与启动画面，启动画面可自定义为噜噜视频，桀桀桀）。</p>
@@ -2763,16 +2760,34 @@ function convMsgs(kind, id) {
   return ((state.groupMsgs || {})[id] || []);
 }
 function unreadOf(kind, id) {
-  const rm = readMap(), k = convKey(kind, id), seen = rm[k] || 0;
+  const rm = readMap(), k = convKey(kind, id);
+  if (rm[k] == null) {   // 本机第一次见到这个会话：从此刻起算，历史不算未读
+    rm[k] = Date.now();
+    try { localStorage.setItem('qlz_read', JSON.stringify(rm)); } catch (e) { }
+    return 0;
+  }
+  const seen = rm[k];
   return convMsgs(kind, id).filter(m => m.from && m.from !== state.me && !m.type
     && (m.time || 0) > seen).length;
 }
 function markRead(kind, id) {
-  const rm = readMap(); rm[convKey(kind, id)] = Date.now();
+  const rm = readMap(), k = convKey(kind, id), now = Date.now();
+  if (rm[k] && now - rm[k] < 2500) { refreshUnreadUI(); return; }
+  rm[k] = now;
   try { localStorage.setItem('qlz_read', JSON.stringify(rm)); } catch (e) { }
   refreshUnreadUI();
 }
 function unreadTotal() {
+  if (!state.me) return 0;
+  let n = 0;
+  (state.groups || []).forEach(g => { n += unreadOf('group', g.id); });
+  ((me() && me().friends) || []).forEach(fid => { if (userById(fid)) n += unreadOf('dm', fid); });
+  const rm = readMap();
+  const seenReq = rm['req'] || 0;
+  n += (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending' && (r.time || 0) > seenReq).length;
+  return n;
+}
+function unreadChat() {
   if (!state.me) return 0;
   let n = 0;
   (state.groups || []).forEach(g => { n += unreadOf('group', g.id); });
@@ -2862,6 +2877,7 @@ function chatMessages() {
 }
 function renderChat() {
   if (!chatCtx) return;
+  markRead(chatCtx.type === 'dm' ? 'dm' : 'group', chatCtx.id);
   const list = chatMessages();
   const box = $('#chatBody');
   const isGroup = chatCtx.type === 'group';
@@ -2955,7 +2971,7 @@ function viewMembers(gid) {
   const g = state.groups.find(x => x.id === gid); if (!g) return;
   openModal(`<h3>${esc(g.name)} · 成员</h3>
     ${clubIds(g).map(id => {
-    const u = userById(id) || { name: '故人', sig: '资料未同步' }; return `<div class="friend-row"><img src="${avatarOf(u)}">
+    const u = userById(id) || { name: '故人', sig: '' }; return `<div class="friend-row"><img src="${avatarOf(u)}">
         <div class="f-main"><div class="f-name">${esc(u.name || '')}${isAdmin(u) ? ' <span class="badge badge-role">' + ROLE[u.role] + '</span>' : ''}</div>
         <div class="f-sub">${esc(u.sig || '')}</div></div></div>`;
   }).join('')}
