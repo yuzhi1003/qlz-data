@@ -315,7 +315,9 @@ main{padding:14px 14px 84px}
 .chat-body{flex:1;overflow-y:auto;padding:14px 12px 8px;display:flex;flex-direction:column;gap:10px;background-size:cover;background-position:center}
 .msg{display:flex;gap:8px;align-items:flex-start;max-width:82%}
 .msg img{width:30px;height:30px;border-radius:8px;flex:none}
-.msg .chat-img{width:auto;height:auto;max-width:min(74vw,300px);max-height:min(48vh,360px);border-radius:12px;display:block;object-fit:contain;cursor:zoom-in}
+.msg .nav-badge{position:absolute;top:4px;right:calc(50% - 18px);min-width:16px;height:16px;padding:0 4px;border-radius:9px;background:#a8473c;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;line-height:1}
+.unread-pill{flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:10px;background:#a8473c;color:#fff;font-size:11px;display:inline-flex;align-items:center;justify-content:center;margin-right:4px}
+.chat-img{width:auto;height:auto;max-width:min(74vw,300px);max-height:min(48vh,360px);border-radius:12px;display:block;object-fit:contain;cursor:zoom-in}
 .msg .bubble.img-b{padding:4px;background:rgba(47,93,80,.14)}
 .msg .bubble{background:rgba(255,255,255,.94);padding:9px 12px;border-radius:4px 12px 12px 12px;font-size:14px;line-height:1.65;
   word-break:break-word;box-shadow:0 2px 8px rgba(74,58,38,.08);border:1px solid rgba(255,255,255,.6)}
@@ -1769,7 +1771,9 @@ let subTab = 'rules';
 
 function renderAll() {
   if (!state.me) return;
+  if (chatCtx) markRead(chatCtx.type === 'dm' ? 'dm' : 'group', chatCtx.id);
   renderTools(); renderDaily(); renderMoments(); renderPoem(); renderFriends(); renderDrawer();
+  refreshUnreadUI();
   const pend = state.reqs.filter(r => r.to === state.me && r.status === 'pending').length;
   $$('.tab-item').forEach(n => {
     const old = n.querySelector('.nav-dot'); if (old) old.remove();
@@ -2330,6 +2334,7 @@ function renderFriends() {
         <div class="avatar" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#35695b,#8aa79b);color:#fdf6e6;font-size:15px">群</div>
         <div class="f-main"><div class="f-name">${esc(g.name)}${g.isMain ? ' <span class="badge badge-role">大群聊</span>' : ''}</div>
         <div class="f-sub">${clubCount(g)} 人 · ${(state.groupMsgs[g.id] || []).length} 条消息</div></div>
+        ${unreadOf('group', g.id) ? `<span class="unread-pill">${unreadOf('group', g.id) > 99 ? '99+' : unreadOf('group', g.id)}</span>` : ''}
         <span class="chev">›</span></div>`).join('')}
     <button class="btn btn-ghost mt8" onclick="createGroup()">＋ 新建群聊，拉好友入群</button>
   </div>`;
@@ -2353,6 +2358,7 @@ function renderFriends() {
       <img src="${avatarOf(u)}">
       <div class="f-main"><div class="f-name">${esc(u.name)}${isAdmin(u) ? ' <span class="badge badge-role">' + ROLE[u.role] + '</span>' : ''}</div>
       <div class="f-sub">${esc(u.sig || '')}</div></div>
+      ${unreadOf('dm', u.id) ? `<span class="unread-pill">${unreadOf('dm', u.id) > 99 ? '99+' : unreadOf('dm', u.id)}</span>` : ''}
       <button class="btn-mini btn-ghost" style="width:auto;padding:6px 10px" onclick="event.stopPropagation();openDM('${u.id}')">私聊</button>
       <button class="btn-mini btn-ghost" style="width:auto;padding:6px 10px;color:var(--cinnabar)" onclick="event.stopPropagation();removeFriend('${u.id}')">解除</button></div>`;
   });
@@ -2744,6 +2750,43 @@ function dismissAdmin(id) {
   }, '卸任');
 }
 
+/* ---------- 未读 ---------- */
+function readMap() { try { return JSON.parse(localStorage.getItem('qlz_read') || '{}'); } catch (e) { return {}; } }
+function convKey(kind, id) { return kind === 'dm' ? 'd:' + dmKey(state.me, id) : 'g:' + id; }
+function convMsgs(kind, id) {
+  if (kind === 'dm') return (state.dm[dmKey(state.me, id)] || []);
+  return ((state.groupMsgs || {})[id] || []);
+}
+function unreadOf(kind, id) {
+  const rm = readMap(), k = convKey(kind, id), seen = rm[k] || 0;
+  return convMsgs(kind, id).filter(m => m.from && m.from !== state.me && !m.type
+    && (m.time || 0) > seen).length;
+}
+function markRead(kind, id) {
+  const rm = readMap(); rm[convKey(kind, id)] = Date.now();
+  try { localStorage.setItem('qlz_read', JSON.stringify(rm)); } catch (e) { }
+  refreshUnreadUI();
+}
+function unreadTotal() {
+  if (!state.me) return 0;
+  let n = 0;
+  (state.groups || []).forEach(g => { n += unreadOf('group', g.id); });
+  ((me() && me().friends) || []).forEach(fid => { if (userById(fid)) n += unreadOf('dm', fid); });
+  return n;
+}
+function refreshUnreadUI() {
+  if (!state.me) return;
+  const n = unreadTotal();
+  const tab = $('.tab-item[data-tab="friends"]');
+  if (tab) {
+    let b = tab.querySelector('.nav-badge');
+    if (!b) { b = document.createElement('div'); b.className = 'nav-badge'; tab.appendChild(b); }
+    b.textContent = n > 99 ? '99+' : n;
+    b.style.display = n > 0 ? 'flex' : 'none';
+  }
+  document.title = (n > 0 ? '(' + (n > 99 ? '99+' : n) + ') ' : '') + '清平乐 · 醉清欢';
+}
+
 /* ---------- 聊天 ---------- */
 let chatCtx = null;
 let chatAudio = null;
@@ -2754,6 +2797,7 @@ function openDM(id) {
   if (isBlocked(id)) return toast('你已与「' + u.name + '」解除好友，重新申请通过后方可再聊。');
   if (!isFriend(state.me, id)) return toast('你们还不是好友，先在主页提交好友申请。');
   chatCtx = { type: 'dm', id };
+  markRead('dm', id);
   $('#chatName').textContent = u.name;
   $('#chatSub').textContent = (u.role !== 'member' ? ROLE[u.role] + ' · ' : '') + (u.sig || '');
   $('#chatView').classList.add('show');
@@ -2762,6 +2806,7 @@ function openDM(id) {
 function openGroup(gid) {
   const g = state.groups.find(x => x.id === gid); if (!g) return;
   chatCtx = { type: 'group', id: gid };
+  markRead('group', gid);
   $('#chatName').textContent = g.name;
   if (g.isMain) {
     const have = new Set(g.members || []);
