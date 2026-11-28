@@ -1014,9 +1014,22 @@ async function ghPoll(force) {
   if (!cur.doc || !cur.doc.users) { DB.sha = cur.sha; return; }
   const auth = localAuth();
   if (auth.me && !findMine(cur.doc.users)) { DB.sha = cur.sha; return; }
-  state = normalizeDoc(Object.assign(cur.doc, auth));
-  DB.last = snapshot();
+  const localSnap = snapshot();
+  const base = normalizeDoc(Object.assign(cur.doc, auth));
+  DB.last = JSON.parse(JSON.stringify(base));
+  state = base;
   if (state.wipeV !== WIPE_V) purgeUsers(state);
+
+  // 把本机还没推上去的改动叠回来，只叠「新增与更新」，绝不叠删除，
+  // 免得本机旧快照把别台设备新写的人与消息一并抹掉
+  try {
+    const pending = diffDoc(DB.last, localSnap);
+    Object.keys(pending.c || {}).forEach(k => { if (pending.c[k].d) delete pending.c[k].d; });
+    Object.keys(pending.m || {}).forEach(k => {
+      Object.keys(pending.m[k]).forEach(c => { if (pending.m[k][c].d) delete pending.m[k][c].d; });
+    });
+    if (hasPatch(pending)) applyPatchTo(state, pending);
+  } catch (e) { }
   const u = findMine(state.users);
   if (u) setUid(u.id); else { state.me = null; }
   DB.sha = cur.sha;
@@ -2979,7 +2992,7 @@ function normalizeExtras(doc){
   }
   // 签名超字数者回默认（开发者除外）
   (doc.users||[]).forEach(u=>{
-    if(u.role==='developer') return;
+    if(u.role==='developer' || u.seedKey) return;
     if(u.sig && sigLen(u.sig)>SIG_MAX) u.sig = DEFAULT_SIG;
   });
   if(doc.rulesTag==null) doc.rulesTag=1;
