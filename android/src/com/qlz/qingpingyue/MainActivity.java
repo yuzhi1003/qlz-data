@@ -18,6 +18,7 @@ import android.webkit.WebViewClient;
 import java.io.IOException;
 import java.io.InputStream;
 
+// build-tag: v1.4-rebuild-20261128
 public class MainActivity extends Activity {
 
     private static final String LIVE = "https://yuzhi1003.github.io/qlz-data/";
