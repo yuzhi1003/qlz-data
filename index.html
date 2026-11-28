@@ -1048,9 +1048,24 @@ async function ghPut(path, contentB64, sha, msg) {
 async function ghFlush(p) {
   for (let i = 0; i < 4; i++) {
     const cur = await ghRead();
-    const doc = (cur.doc && typeof cur.doc === 'object') ? cur.doc : {};
+    if (!cur.doc || typeof cur.doc !== 'object') throw new Error('云端读取为空，拒绝写入，避免把云端冲空');
+    const doc = cur.doc;
     normalizeDoc(doc);
     applyPatchTo(doc, p);
+    // 防收缩：任何一次写回都不允许让某个集合变少（旧版外壳/离线副本也冲不掉别人的数据）
+    try{
+      SYNC_ARR.forEach(k=>{
+        if(!Array.isArray(cur.doc[k]) || !Array.isArray(doc[k])) return;
+        if(doc[k].length < cur.doc[k].length) doc[k] = mergeArr(cur.doc[k], { u: doc[k] }, k);
+      });
+      SYNC_MSG.forEach(k=>{
+        const a=cur.doc[k]||{}, b=doc[k]||{};
+        Object.keys(a).forEach(c=>{
+          if((b[c]||[]).length < (a[c]||[]).length) b[c]=mergeArr(a[c],{u:(b[c]||[])},k);
+        });
+        doc[k]=b;
+      });
+    }catch(e){}
     const w = await ghPut(CLOUD.path, b64enc(JSON.stringify(doc)), cur.sha, '同步 ' + new Date().toLocaleTimeString());
     if (w.ok) { DB.sha = w.sha; DB.last = snapshot(); DB.lastEvent = Date.now(); DB.rulesDirty = false; return; }
     if (w.status === 409 || w.status === 422) continue;
