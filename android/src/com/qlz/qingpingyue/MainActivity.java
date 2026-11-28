@@ -2,8 +2,14 @@ package com.qlz.qingpingyue;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.webkit.ValueCallback;
@@ -12,13 +18,18 @@ import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Toast;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 
-// build-tag: v1.4-rebuild-20261128
+// build-tag: v1.7-notify-20261128
 public class MainActivity extends Activity {
 
     private static final String LIVE = "https://yuzhi1003.github.io/qlz-data/";
@@ -117,6 +128,11 @@ public class MainActivity extends Activity {
             }
         });
 
+        web.addJavascriptInterface(new Bridge(), "QLZNative");
+        ensureChannel();
+        if (Build.VERSION.SDK_INT >= 33) {
+            try { requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 2002); } catch (Exception e) { }
+        }
         web.loadUrl(LIVE);
     }
 
@@ -164,6 +180,93 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() { handleBack(); }
+
+    /* ---------- 原生桥：通知 / 备份 ---------- */
+    public class Bridge {
+        @JavascriptInterface
+        public void notifyMsg(String title, String body, int count) {
+            pushNotify(title, body, count);
+        }
+        @JavascriptInterface
+        public void saveBackup(String name, String content) {
+            writeBackup(name, content);
+        }
+        @JavascriptInterface
+        public String platform() { return "android"; }
+    }
+
+    private void ensureChannel() {
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm == null) return;
+            NotificationChannel ch = new NotificationChannel("qlz_msg", "清平乐消息", NotificationManager.IMPORTANCE_HIGH);
+            ch.setShowBadge(true);
+            ch.setDescription("群聊与私聊提醒");
+            ch.enableVibration(false);
+            nm.createNotificationChannel(ch);
+        }
+    }
+
+    private void pushNotify(final String title, final String body, final int count) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    ensureChannel();
+                    NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                    if (nm == null) return;
+                    Intent it = new Intent(MainActivity.this, MainActivity.class);
+                    it.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                    PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 0, it,
+                            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                    Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                            ? new Notification.Builder(MainActivity.this, "qlz_msg")
+                            : new Notification.Builder(MainActivity.this);
+                    b.setSmallIcon(R.mipmap.ic_launcher)
+                            .setContentTitle(title == null ? "清平乐" : title)
+                            .setContentText(body == null ? "有新消息" : body)
+                            .setAutoCancel(true)
+                            .setContentIntent(pi)
+                            .setNumber(count < 0 ? 0 : count)
+                            .setShowWhen(true);
+                    if (Build.VERSION.SDK_INT >= 21) b.setColor(0xFF35695B);
+                    nm.notify(1001, b.build());
+                } catch (Exception e) { }
+            }
+        });
+    }
+
+    private void writeBackup(final String name, final String content) {
+        try {
+            byte[] data = content.getBytes("UTF-8");
+            if (Build.VERSION.SDK_INT >= 29) {
+                ContentValues v = new ContentValues();
+                v.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name);
+                v.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/json");
+                v.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download");
+                Uri uri = getContentResolver().insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                if (uri == null) throw new IOException("无法创建文件");
+                OutputStream os = getContentResolver().openOutputStream(uri);
+                os.write(data); os.flush(); os.close();
+                toast("备份已存到「下载」文件夹：" + name);
+            } else {
+                File dir = getExternalFilesDir(null);
+                File f = new File(dir, name);
+                FileOutputStream fo = new FileOutputStream(f);
+                fo.write(data); fo.flush(); fo.close();
+                toast("备份已存到：" + f.getAbsolutePath());
+            }
+        } catch (Exception e) {
+            toast("备份失败：" + e.getMessage());
+        }
+    }
+
+    private void toast(final String msg) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() { Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show(); }
+        });
+    }
 
     @Override
     protected void onDestroy() {
