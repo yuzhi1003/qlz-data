@@ -662,7 +662,9 @@ function baseState() {
     rules: DEFAULT_RULES,
     signups: [], polls: [], stats: [], notices: [],
     groups: [], groupMsgs: {}, dm: {}, reqs: [], flyflowers: [], updates: [], gnameReqs: [], tombs: [], rolesV: 0,
-    visits, likes, seq: 0
+    visits, likes, seq: 0,
+    // 删过的号写死在这儿，新设备、离线、读镜像时都不会把它们放回来
+    delIds: ['u_me_mx07o6h6', 'u_me_mwyx5co4', 'u_me_mwzzbz9s']
   };
 }
 
@@ -1091,7 +1093,7 @@ async function ghRead(cond) {
 // 接口连不上时，从 jsDelivr 的仓库镜像读一份（只读，可能有几分钟延迟）
 async function cdnRead() {
   const u = 'https://fastly.jsdelivr.net/gh/' + CLOUD.owner + '/' + CLOUD.repo + '@' + CLOUD.branch + '/' + CLOUD.path;
-  const r = await fetch(u + (u.indexOf('?') > -1 ? '&' : '?') + 't=' + Math.floor(Date.now() / 300000), { cache: 'no-store' });
+  const r = await fetch(u);
   if (!r.ok) throw new Error('镜像也没读到');
   const doc = await r.json();
   if (!doc || !doc.users || !doc.users.length) throw new Error('镜像内容为空');
