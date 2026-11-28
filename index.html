@@ -410,7 +410,7 @@ audio{width:100%;margin-top:6px}
     <button class="btn btn-wechat" id="btnWechat">微信一键登录</button>
     <div class="auth-note" id="authNote">
       本设备仅可注册一个账号，一经注册不可再开小号，桀桀桀。<br>
-      帮会只认一位开发者，首位注册者得之。
+      帮会仅设一位开发者，由首位注册者任之。
     </div>
   </div>
 </div>
@@ -1712,7 +1712,7 @@ function showAuth() {
   const reg = state.registered;
   $('#authNote').innerHTML = reg
     ? `本设备已注册账号「${esc((me() || state.users.find(u => u.id === state.regUid) || {}).name || '')}」。<br>请用微信登录继续，本帮会不发小号。`
-    : `本设备仅可注册一个账号，一经注册不可再开小号。<br>帮会只认一位开发者，首位注册者得之。`;
+    : `本设备仅可注册一个账号，一经注册不可再开小号。<br>帮会仅设一位开发者，由首位注册者任之。`;
   $('#btnWechat').textContent = reg ? '微信登录' : '微信一键注册登录';
   auth.classList.remove('hidden');
 }
