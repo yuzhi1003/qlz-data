@@ -9,6 +9,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="清平乐">
 <meta name="theme-color" content="#2f5d50">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#2f5d50">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src * data: blob:; media-src * data: blob:; style-src 'self' 'unsafe-inline' *; connect-src *; frame-src 'none'">
@@ -827,13 +829,12 @@ function askKeyPass() {
         <input id="kpInput" type="password" autocomplete="off" style="width:100%;box-sizing:border-box;border:1px solid rgba(66,56,40,.25);border-radius:2px;padding:10px 12px;font-size:14px;background:#fff;outline:none">
         <div id="kpErr" style="font-size:11.5px;color:#9c3f34;min-height:16px;margin-top:6px"></div>
         <div style="display:flex;gap:8px;margin-top:10px">
-          <button id="kpOk" style="flex:1;border:none;border-radius:2px;padding:10px;background:#1e3b31;color:#f6efdd;font-size:14px;letter-spacing:2px">解锁</button>
-          <button id="kpSkip" style="flex:1;border:1px solid rgba(66,56,40,.25);border-radius:2px;padding:10px;background:#fffdf5;color:#6b6f66;font-size:14px;letter-spacing:2px">稍后</button>
+          <button id="kpOk" style="flex:1;border:none;border-radius:2px;padding:10px;background:#1e3b31;color:#f6efdd;font-size:14px;letter-spacing:2px">解锁进入</button>
         </div>
+        <div style="font-size:11px;color:#8b8578;line-height:1.7;margin-top:8px;text-align:center">未填口令无法进入清平乐，注册与未注册成员都一样。</div>
       </div>
     </div>`);
-  const close = () => { const m = document.getElementById('kpMask'); if (m) m.remove(); };
-  document.getElementById('kpSkip').onclick = close;
+  // 不提供「稍后」：口令是进门的一道闸
   document.getElementById('kpOk').onclick = async () => {
     const pw = (document.getElementById('kpInput').value || '').trim();
     const err = document.getElementById('kpErr');
