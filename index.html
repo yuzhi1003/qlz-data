@@ -1066,6 +1066,19 @@ async function ghPoll(force) {
   } catch (e) { }
   const u = findMine(state.users);
   if (u) setUid(u.id); else { state.me = null; }
+  try {
+    if (u) {
+      const pendKey = 'qlz_pend_' + u.id;
+      const pend = JSON.parse(localStorage.getItem(pendKey) || '[]');
+      const nowAccepted = (state.reqs || []).filter(r => r.from === u.id && r.status === 'accepted'
+        && pend.indexOf(r.to) > -1);
+      if (nowAccepted.length) {
+        const names = nowAccepted.map(r => (userById(r.to) || {}).name || '对方').join('、');
+        toast(names + ' 已同意你的好友申请');
+        localStorage.setItem(pendKey, JSON.stringify(pend.filter(id => !nowAccepted.some(r => r.to === id))));
+      }
+    }
+  } catch (e) { }
   DB.sha = cur.sha;
   persistLocal();
   if (hasPatch(diffDoc(DB.last || {}, snapshot()))) queueSync();
@@ -2406,6 +2419,11 @@ function applyFriend(id) {
   if (isFriend(state.me, id)) return toast('你们已是好友');
   if (state.reqs.some(r => r.from === state.me && r.to === id && r.status === 'pending')) return toast('申请已发出，请等待');
   const r = { id: uid('r'), from: state.me, to: id, time: Date.now(), status: 'pending' };
+  try {
+    const k = 'qlz_pend_' + state.me;
+    const arr = JSON.parse(localStorage.getItem(k) || '[]');
+    if (arr.indexOf(id) < 0) { arr.push(id); localStorage.setItem(k, JSON.stringify(arr)); }
+  } catch (e) { }
   state.reqs.unshift(r);
   saveState(); renderFriends();
   toast('已向「' + u.name + '」发出好友申请');
@@ -3197,6 +3215,25 @@ function normalizeExtras(doc){
     doc.groups = (doc.groups||[]).filter(g=>g.isMain);
     Object.keys(doc.groupMsgs||{}).forEach(k=>{ if(!keep.includes(k)) delete doc.groupMsgs[k]; });
   }
+  // 好友关系自愈：已同意的申请补齐双向好友；单边好友补成双向
+  const umap = new Map((doc.users || []).map(u => [u.id, u]));
+  (doc.reqs || []).forEach(r => {
+    if (r.status !== 'accepted') return;
+    const a = umap.get(r.from), b = umap.get(r.to);
+    if (!a || !b) return;
+    a.friends = a.friends || []; b.friends = b.friends || [];
+    if (a.friends.indexOf(b.id) < 0) a.friends.push(b.id);
+    if (b.friends.indexOf(a.id) < 0) b.friends.push(a.id);
+  });
+  (doc.users || []).forEach(u => {
+    (u.friends || []).forEach(fid => {
+      const f = umap.get(fid);
+      if (!f) return;
+      f.friends = f.friends || [];
+      if (f.friends.indexOf(u.id) < 0) f.friends.push(u.id);
+    });
+  });
+
   // 签名超字数者回默认（开发者除外）
   (doc.users||[]).forEach(u=>{
     if(u.role==='developer' || u.seedKey) return;
