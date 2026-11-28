@@ -3351,6 +3351,13 @@ function authorAvatar(n){
   return u? avatarOf(u): OFFICIAL_AVATAR;
 }
 function renderUpdatesCard(){
+  // 公告防丢：云端一条都不剩时，用本机备份补回（防止整份覆盖把公告冲掉）
+  try{
+    if(!(state.updates||[]).length){
+      const bak=JSON.parse(localStorage.getItem('qlz_updates_bak')||'[]');
+      if(bak.length){ state.updates=bak; saveState(); if(typeof flushPatch==='function') flushPatch(); }
+    }
+  }catch(e){}
   const list=(state.updates||[]).slice().sort((a,b)=>b.time-a.time);
   if(!list.length) return '';
   let h=`<div class="card upd-card"><div class="card-title"><span class="bar"></span>修复更新公告<span class="tag">永久留存 · 署名 公语知</span></div>`;
@@ -3369,6 +3376,7 @@ function publishUpdate(){
     ok:'发布', onSubmit:v=>{
       if(!v.body){toast('正文不能空');return false;}
       state.updates.unshift({id:uid('up'),ver:v.ver||'更新',body:v.body,time:Date.now()});
+      try{ localStorage.setItem('qlz_updates_bak', JSON.stringify(state.updates.slice(0,50))); }catch(e){}
       saveState(); renderDaily(); toast('更新公告已发布');
     }});
 }
