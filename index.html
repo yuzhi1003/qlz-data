@@ -1097,9 +1097,16 @@ async function ghInit() {
     });
     setTimeout(() => pollOnce(true), 1500);
   } catch (e) {
-    console.warn('[云同步] 初始化失败，切换本地模式', e);
+    console.warn('[云同步] 初始化失败', e);
     DB.ready = false;
-    setTimeout(() => { toast('云端未连接，当前为本机模式'); }, 1800);
+    DB.err = (e && e.message) || '网络';
+    setTimeout(() => { toast('云端未连上（' + DB.err + '），稍后自动重试'); }, 1800);
+    if (cloudOn() && !DB.retry) {
+      DB.retry = setInterval(async () => {
+        if (DB.ready || !cloudOn()) { clearInterval(DB.retry); DB.retry = null; return; }
+        try { await cloudInit(); if (DB.ready) renderAll(); } catch (err2) { }
+      }, 30000);
+    }
   }
 }
 
@@ -2495,7 +2502,8 @@ function renderDrawer() {
   <div class="set-group">
     <h4>云端</h4>
     <div class="set-line"><div class="lbl">云同步</div><div class="val">${(typeof cloudOn === 'function' && cloudOn()) ? (CLOUD.p === 'gh' ? 'GitHub · ' + CLOUD.owner + '/' + CLOUD.repo : '已配置') : '未配置（本机）'}</div><button class="act" onclick="cloudConfig()">配置</button></div>
-    <div class="set-line"><div class="lbl">同步状态</div><div class="val">${DB.ready ? '已连云端' : '本机模式'} · 在册 ${(state.users || []).length} 人</div><button class="act" onclick="forceSync()">立即同步</button></div>
+    <div class="set-line"><div class="lbl">同步状态</div><div class="val">${DB.ready ? '已连云端' : (cloudOn() ? '待重连' + (DB.err ? '（' + esc(String(DB.err).slice(0, 18)) + '）' : '') : '本机模式')} · 在册 ${(state.users || []).length} 人</div><button class="act" onclick="forceSync()">立即同步</button></div>
+    <div class="set-line"><div class="lbl">密钥</div><div class="val">${CLOUD.token ? '已存 · 末四位 ' + esc(String(CLOUD.token).slice(-4)) + ' · ' + CLOUD.token.length + ' 位' : '未填写'}</div><button class="act" onclick="cloudConfig()">重填</button></div>
     <div class="set-line"><div class="lbl">页面缓存</div><div class="val">${localStorage.getItem('qlz_cache_t') ? '上次清理 ' + localStorage.getItem('qlz_cache_t') : '更新后仍是旧页时可清'}</div><button class="act" onclick="clearCache()">清理</button></div>
     <p class="hint" style="margin-top:8px">只清页面缓存，不动账号、动态与本机记录；清完自动重载最新网页。</p>
   </div>
@@ -2521,7 +2529,12 @@ function renderDrawer() {
   <p class="hint" style="text-align:center;margin-top:8px">清平乐•醉清欢 · 本地数据版</p>`;
 }
 async function forceSync() {
-  if (!DB.ready) return toast('云端未连接：先在「配置」里填令牌');
+  if (!DB.ready) {
+    if (!cloudOn()) return toast('尚未填写令牌：请在上方「配置」里填仓库与密钥');
+    toast('正在重连云端…');
+    try { await cloudInit(); } catch (e) { }
+    if (!DB.ready) return toast('重连失败：' + (DB.err || '网络不通或密钥无效'));
+  }
   toast('正在拉取云端…');
   try {
     if (CLOUD.p === 'gh') await ghPoll(true); else await pollOnce(true);
