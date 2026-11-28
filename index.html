@@ -2979,6 +2979,12 @@ function sendChatMsg(kind, text) {
   list.push(msg);
   saveState(); renderChat();
   const inp = $('#chatInput'); if (inp) inp.value = '';
+  if (typeof cloudOn === 'function' && cloudOn() && DB.ready) {
+    clearTimeout(syncTimer);
+    flushPatch().catch(() => { });
+  } else if (msg.kind !== 'img') {
+    toast('云端未连上，这条只存在本机');
+  }
 }
 function chatMore() {
   if (!chatCtx) return;
