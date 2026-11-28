@@ -785,6 +785,12 @@ const cloudOn = () => CLOUD.p === 'gh'
   : !!(CLOUD.p === 'sb' && CLOUD.url && CLOUD.key);
 if (!CLOUD.branch) CLOUD.branch = 'main';
 if (!CLOUD.path) CLOUD.path = 'qlz-data-2.json';
+// 密钥池：一次可以填多把，遇到 401/403/429 自动换下一把
+CLOUD.tokens = String(CLOUD.token || '').split(/[\s,]+/).filter(t => /^(ghp_|github_pat_)/.test(t));
+if (!CLOUD.tokens.length && CLOUD.token) CLOUD.tokens = [CLOUD.token];
+CLOUD.token = CLOUD.tokens[0] || CLOUD.token || '';
+CLOUD.tokIdx = 0;
+const POLL_MS = 5000;
 // 数据文件迁到 qlz-data-2.json：旧版外壳/旧缓存还会往 qlz-data.json 里写入已清空的数据，
 // 换一份它们不认识的档案，旧客户端的破坏就落不到新数据上
 if (CLOUD.path === 'qlz-data.json') CLOUD.path = 'qlz-data-2.json';
@@ -993,7 +999,7 @@ const GHAPI = 'https://api.github.com';
 function ghH(extra) {
   return Object.assign({
     'Accept': 'application/vnd.github+json',
-    'Authorization': 'token ' + CLOUD.token,
+    'Authorization': 'token ' + (CLOUD.tokens && CLOUD.tokens[CLOUD.tokIdx] ? CLOUD.tokens[CLOUD.tokIdx] : CLOUD.token),
     'X-GitHub-Api-Version': '2022-11-28'
   }, extra || {});
 }
@@ -1012,10 +1018,30 @@ function b64dec(b) {
 function ghUrl(path) {
   return GHAPI + '/repos/' + CLOUD.owner + '/' + CLOUD.repo + '/contents/' + (path || CLOUD.path);
 }
-async function ghRead() {
-  const r = await fetch(ghUrl() + '?ref=' + encodeURIComponent(CLOUD.branch), { headers: ghH(), cache: 'no-store' });
+async function ghFetch(url, opts) {
+  const n = Math.max(1, (CLOUD.tokens || []).length);
+  let last = null;
+  for (let i = 0; i < n; i++) {
+    const r = await fetch(url, opts());
+    if (r.status === 401 || r.status === 403 || r.status === 429) {
+      last = r;
+      if (n > 1) { CLOUD.tokIdx = (CLOUD.tokIdx + 1) % n; continue; }  // 换下一把钥匙重试
+      return r;
+    }
+    return r;
+  }
+  return last;
+}
+async function ghRead(cond) {
+  const r = await ghFetch(ghUrl() + '?ref=' + encodeURIComponent(CLOUD.branch), () => {
+    const h = ghH();
+    if (cond && DB.etag) h['If-None-Match'] = DB.etag;
+    return { headers: h, cache: 'no-store' };
+  });
+  if (r.status === 304) return { notModified: true, sha: DB.sha, doc: null };   // 没变化，不耗配额
   if (r.status === 404) return { sha: null, doc: null };
   if (!r.ok) throw new Error('GH ' + r.status);
+  try { DB.etag = r.headers.get('ETag') || DB.etag; } catch (e) { }
   const j = await r.json();
   let doc = null;
   try { doc = JSON.parse(b64dec(j.content)); } catch (e) { doc = null; }
@@ -1024,11 +1050,11 @@ async function ghRead() {
 async function ghPut(path, contentB64, sha, msg) {
   const body = { message: msg || ('qlz ' + Date.now().toString(36)), content: contentB64, branch: CLOUD.branch };
   if (sha) body.sha = sha;
-  const r = await fetch(ghUrl(path), {
+  const r = await ghFetch(ghUrl(path), () => ({
     method: 'PUT',
     headers: ghH({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body)
-  });
+  }));
   let j = null; try { j = await r.json(); } catch (e) { }
   return { ok: r.ok, status: r.status, sha: j && j.content && j.content.sha, json: j };
 }
@@ -1080,8 +1106,9 @@ async function ghUpload(dataUrl, kind, filename) {
 async function ghPoll(force) {
   try { await flushPatch(); } catch (e) { }
   let cur;
-  try { cur = await ghRead(); } catch (e) { return; }
+  try { cur = await ghRead(true); } catch (e) { return; }
   if (!cur.sha) return;
+  if (cur.notModified && !force) return;
   if (cur.sha === DB.sha && !force) return;
   if (!cur.doc || !cur.doc.users) { DB.sha = cur.sha; return; }
   const auth = localAuth();
@@ -1167,7 +1194,7 @@ async function ghInit() {
     persistLocal();
     if (!doc || !doc.users || !doc.users.length) queueSync();
     if (DB.poll) clearInterval(DB.poll);
-    DB.poll = setInterval(() => pollOnce(false), 60000);
+    DB.poll = setInterval(() => pollOnce(false), POLL_MS);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && DB.ready) { pollOnce(true); }
     });
@@ -1343,7 +1370,7 @@ async function cloudInit() {
     if (!doc || !doc.users || !doc.users.length) queueSync(); // 首次建库：把种子数据写上去
     startRealtime();
     if (DB.poll) clearInterval(DB.poll);
-    DB.poll = setInterval(() => pollOnce(false), 60000);
+    DB.poll = setInterval(() => pollOnce(false), POLL_MS);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && DB.ready) { pollOnce(true); }
     });
@@ -1386,7 +1413,8 @@ function cloudConfig() {
   openModal(`<h3>云同步设置 <span class="hint" style="font-size:12px;opacity:.6">v5</span></h3>
     <p class="hint" style="margin:6px 0 12px">填 GitHub 仓库（推荐，国内可访问）。仓库与密钥只用来存帮会数据，填一次，重启后即生效。</p>
     <input class="ta" id="cfOwner" style="height:44px" placeholder="仓库：用户名/仓库名，如 yuzhi1003/qlz-data" value="${gh ? (CLOUD.owner + '/' + CLOUD.repo) : ''}">
-    <input class="ta" id="cfToken" style="height:44px;margin-top:8px" placeholder="访问密钥（ghp_ 或 github_pat_ 开头）" value="${gh ? CLOUD.token : ''}">
+    <textarea class="ta" id="cfToken" style="height:120px;margin-top:8px" placeholder="访问密钥，一行一把，可填多把（ghp_ 或 github_pat_ 开头）">${gh ? esc((CLOUD.tokens || [CLOUD.token]).join('\n')) : ''}</textarea>
+    <div class="hint" style="margin-top:6px">已载入 ${(CLOUD.tokens || []).length} 把密钥；一把被限流会自动换下一把。</div>
     <div class="hint" style="margin-top:10px">以下为 Supabase（海外，可能连不上，可留空）</div>
     <input class="ta" id="cfUrl" style="height:44px;margin-top:6px" placeholder="https://xxxx.supabase.co" value="${CLOUD.p === 'sb' ? CLOUD.url : ''}">
     <input class="ta" id="cfKey" style="height:44px;margin-top:8px" placeholder="anon public key" value="${CLOUD.p === 'sb' ? CLOUD.key : ''}">
@@ -1396,16 +1424,20 @@ function cloudConfig() {
 }
 function saveCloud() {
   const o = (($('#cfOwner') || {}).value || '').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/+$/, '');
-  const t = (($('#cfToken') || {}).value || '').trim();
+  const tRaw = (($('#cfToken') || {}).value || '').trim();
+  const tokens = tRaw.split(/[\s,]+/).filter(x => x).map(x => x.trim());
+  const t = tokens.join('\n');
   const u = (($('#cfUrl') || {}).value || '').trim().replace(/\/+$/, '');
   const k = (($('#cfKey') || {}).value || '').trim();
-  if (t && !/^(ghp_|github_pat_)/.test(t)) return toast('密钥要以 ghp_ 开头，请重新复制完整一串');
-  if (t && t.length < 20) return toast('密钥看起来太短，请重新复制完整一串');
+  for (const kk of tokens) {
+    if (!/^(ghp_|github_pat_)/.test(kk)) return toast('有一把密钥格式不对：要以 ghp_ 或 github_pat_ 开头');
+    if (kk.length < 20) return toast('有一把密钥太短，请重新复制完整一串');
+  }
   if (o && t) {
     const parts = o.split('/');
     if (parts.length < 2) return toast('仓库要写成 用户名/仓库名');
     localStorage.setItem('qlz_cloud', JSON.stringify({
-      p: 'gh', owner: parts[0], repo: parts[1], branch: 'main', path: 'qlz-data.json', token: t
+      p: 'gh', owner: parts[0], repo: parts[1], branch: 'main', path: 'qlz-data-2.json', token: t
     }));
   } else if (u && k) {
     localStorage.setItem('qlz_cloud', JSON.stringify({ p: 'sb', url: u, key: k }));
@@ -2589,7 +2621,7 @@ function renderDrawer() {
     <div class="set-line"><div class="lbl">云同步</div><div class="val">${(typeof cloudOn === 'function' && cloudOn()) ? (CLOUD.p === 'gh' ? 'GitHub · ' + CLOUD.owner + '/' + CLOUD.repo : '已配置') : '未配置（本机）'}</div><button class="act" onclick="cloudConfig()">配置</button></div>
     <div class="set-line"><div class="lbl">同步状态</div><div class="val">${DB.ready ? '已连云端' : (cloudOn() ? '待重连' + (DB.err ? '（' + esc(String(DB.err).slice(0, 18)) + '）' : '') : '本机模式')} · 在册 ${(state.users || []).length} 人</div><button class="act" onclick="forceSync()">立即同步</button></div>
     <div class="set-line"><div class="lbl">最近一次错误</div><div class="val">${DB.err ? esc(String(DB.err).slice(0, 26)) : '无'}</div><button class="act" onclick="forceSync()">重试</button></div>
-    <div class="set-line"><div class="lbl">密钥</div><div class="val">${CLOUD.token ? '已存 · 末四位 ' + esc(String(CLOUD.token).slice(-4)) + ' · ' + CLOUD.token.length + ' 位' : '未填写'}</div><button class="act" onclick="cloudConfig()">重填</button></div>
+    <div class="set-line"><div class="lbl">密钥</div><div class="val">${CLOUD.token ? '已存 ' + (CLOUD.tokens || []).length + ' 把 · 当前末四位 ' + esc(String((CLOUD.tokens || [CLOUD.token])[CLOUD.tokIdx || 0]).slice(-4)) : '未填写'}</div><button class="act" onclick="cloudConfig()">重填</button></div>
     <div class="set-line"><div class="lbl">数据备份</div><div class="val">导出整份数据为 JSON</div><button class="act" onclick="exportBackup()">导出</button></div>
     <div class="set-line"><div class="lbl">页面缓存</div><div class="val">${localStorage.getItem('qlz_cache_t') ? '上次清理 ' + localStorage.getItem('qlz_cache_t') : '更新后仍是旧页时可清'}</div><button class="act" onclick="clearCache()">清理</button></div>
     <p class="hint" style="margin-top:8px">只清页面缓存，不动账号、动态与本机记录；清完自动重载最新网页。</p>
