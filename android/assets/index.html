@@ -771,7 +771,7 @@ function boot() {
    动态、聊天、接龙、投票等改动会在几百毫秒内推送到其他人手机上。 */
 /* 内置云端配置（随文件下发，优先级最高） */
 window.QLZ_CLOUD = {
-  p: 'gh', owner: 'yuzhi1003', repo: 'qlz-data', branch: 'main', path: 'qlz-data.json',
+  p: 'gh', owner: 'yuzhi1003', repo: 'qlz-data', branch: 'main', path: 'qlz-data-2.json',
   token: ''
 };
 const CLOUD = Object.assign(
@@ -784,7 +784,10 @@ const cloudOn = () => CLOUD.p === 'gh'
   ? !!(CLOUD.owner && CLOUD.repo && CLOUD.token)
   : !!(CLOUD.p === 'sb' && CLOUD.url && CLOUD.key);
 if (!CLOUD.branch) CLOUD.branch = 'main';
-if (!CLOUD.path) CLOUD.path = 'qlz-data.json';
+if (!CLOUD.path) CLOUD.path = 'qlz-data-2.json';
+// 数据文件迁到 qlz-data-2.json：旧版外壳/旧缓存还会往 qlz-data.json 里写入已清空的数据，
+// 换一份它们不认识的档案，旧客户端的破坏就落不到新数据上
+if (CLOUD.path === 'qlz-data.json') CLOUD.path = 'qlz-data-2.json';
 
 const SYNC_ARR = ['users', 'posts', 'signups', 'polls', 'stats', 'notices', 'groups', 'reqs', 'flyflowers', 'updates', 'gnameReqs', 'tombs'];
 const SYNC_MSG = ['groupMsgs', 'dm'];
