@@ -695,7 +695,7 @@ function baseState() {
       content: '【开帮公告】\n清平乐自11月28日起，一应事务由即任大当家定夺。\n接龙必实名、投票可匿名、统计每日一填。愿诸君在此，各得一段醉清欢。',
       imgs: []
     }],
-    groups: [], groupMsgs: {}, dm: {}, reqs: [], flyflowers: [], updates: [], gnameReqs: [], rolesV: 0,
+    groups: [], groupMsgs: {}, dm: {}, reqs: [], flyflowers: [], updates: [], gnameReqs: [], tombs: [], rolesV: 0,
     visits, likes, seq: 0
   };
 }
@@ -787,7 +787,7 @@ const cloudOn = () => CLOUD.p === 'gh'
 if (!CLOUD.branch) CLOUD.branch = 'main';
 if (!CLOUD.path) CLOUD.path = 'qlz-data.json';
 
-const SYNC_ARR = ['users', 'posts', 'signups', 'polls', 'stats', 'notices', 'groups', 'reqs', 'flyflowers', 'updates', 'gnameReqs'];
+const SYNC_ARR = ['users', 'posts', 'signups', 'polls', 'stats', 'notices', 'groups', 'reqs', 'flyflowers', 'updates', 'gnameReqs', 'tombs'];
 const SYNC_MSG = ['groupMsgs', 'dm'];
 const DB = { ready: false, last: null, rev: null, channel: null, sb: null, busy: false, timer: null, poll: null, lastEvent: 0 };
 let cloudReady = Promise.resolve();
@@ -852,7 +852,7 @@ function diffDoc(prev, next) {
   const p = {};
   SYNC_ARR.forEach(k => {
     const r = diffArr(prev[k], next[k]);
-    if (k === 'users' || k === 'groups') r.d = [];   // 人与群只增不删，删人走后台专用入口
+    r.d = [];   // 一律只增不删：旧设备不会再把别人的数据删掉
     if (r.u.length || r.d.length) { p.c = p.c || {}; p.c[k] = r; }
   });
   SYNC_MSG.forEach(k => {
@@ -907,6 +907,16 @@ function mergeArr(cur, r, key) {
       if (a.isMain || item.isMain) m.isMain = true;
       if (!m.name) m.name = a.name || '清平乐·醉清欢';
       arr[i] = m;
+    } else if (key === 'reqs') {
+      // 已同意/已拒绝是终态，别让旧快照把它改回「待验证」
+      const m = Object.assign({}, a, item);
+      if (a.status && a.status !== 'pending') m.status = a.status;
+      arr[i] = m;
+    } else if (key === 'posts') {
+      const m = Object.assign({}, a, item);
+      m.likes = Array.from(new Set([].concat(a.likes || [], item.likes || [])));
+      if ((a.time || 0) > (item.time || 0)) { m.time = a.time; if (!item.text && a.text) m.text = a.text; }
+      arr[i] = m;
     } else if (key === 'users') {
       const m = Object.assign({}, a, item);
       m.friends = Array.from(new Set([].concat(a.friends || [], item.friends || [])));
@@ -923,16 +933,27 @@ function mergeArr(cur, r, key) {
 function applyPatchTo(doc, p) {
   if (!p) return doc;
   normalizeDoc(doc);
-  Object.keys(p.c || {}).forEach(k => { doc[k] = mergeArr(doc[k], p.c[k], k); });
+  Object.keys(p.c || {}).forEach(k => {
+    const patch = Object.assign({}, p.c[k]);
+    delete patch.d;                       // 收到删除指令也不执行
+    doc[k] = mergeArr(doc[k], patch, k);
+  });
   Object.keys(p.m || {}).forEach(k => {
     doc[k] = doc[k] || {};
-    Object.keys(p.m[k]).forEach(c => { doc[k][c] = mergeArr(doc[k][c], p.m[k][c], k); });
+    Object.keys(p.m[k]).forEach(c => {
+      const patch = Object.assign({}, p.m[k][c]);
+      delete patch.d;                     // 群聊私聊同样不删
+      doc[k][c] = mergeArr(doc[k][c], patch, k);
+    });
   });
   Object.keys(p.v || {}).forEach(k => {
     doc[k] = doc[k] || {};
     Object.keys(p.v[k]).forEach(dt => {
       doc[k][dt] = doc[k][dt] || {};
-      Object.assign(doc[k][dt], p.v[k][dt]);
+      Object.keys(p.v[k][dt]).forEach(uid => {
+        const a = doc[k][dt][uid] || 0, bv = p.v[k][dt][uid] || 0;
+        doc[k][dt][uid] = (k === 'likes') ? Math.max(a, bv) : bv;
+      });
     });
   });
   if (p.s) Object.assign(doc, p.s);
@@ -2261,6 +2282,8 @@ function delPost(id) {
   if (p.uid !== m.id && !isAdmin(m)) return toast('仅本人或管理员可删除');
   confirmBox('删除动态', '删除后其图片一并移除，确定？', () => {
     state.posts = state.posts.filter(x => x.id !== id);
+    state.tombs = state.tombs || [];
+    if (state.tombs.indexOf(id) < 0) state.tombs.push(id);
     saveState(); renderMoments(); toast('已删除');
   }, '删除');
 }
@@ -3203,7 +3226,10 @@ function rateOK(kind){
   arr.push(now); return true;
 }
 function normalizeExtras(doc){
-  ['updates','gnameReqs'].forEach(k=>{ if(!Array.isArray(doc[k])) doc[k]=[]; });
+  ['updates','gnameReqs','tombs'].forEach(k=>{ if(!Array.isArray(doc[k])) doc[k]=[]; });
+  // 墓碑：已删动态不再复活
+  const tombSet = new Set((doc.tombs||[]).map(t=> t && t.id ? t.id : t));
+  if(tombSet.size) doc.posts = (doc.posts||[]).filter(p=> !tombSet.has(p.id));
   // 内置角色防丢：大雪、故雨总在册
   if(!doc.users) doc.users=[];
   npcUsers().forEach(n=>{
