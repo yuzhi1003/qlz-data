@@ -652,83 +652,19 @@ function npcUsers() {
 
 function baseState() {
   const users = npcUsers();
-  const ids = users.map(u => u.id);
-  const now = Date.now();
-  const y = ymd(dayShift(-1));
   const visits = {}, likes = {};
-  // 昨日榜单演示数据
-  visits[y] = { u_jyz: 128, u_hf: 96, u_dm: 61, u_jin: 44, u_huan: 33, u_qing: 21, u_muyu: 18 };
-  likes[y] = { u_hf: 42, u_dm: 31, u_jyz: 27, u_huan: 15, u_tingxue: 9 };
-  likes[ymd()] = { u_hf: 6, u_dm: 3 };
-
-  users.forEach(u => { u.visitsTotal = Object.values(visits).reduce((s, m) => s + (m[u.id] || 0), 0); });
-
-  const posts = [
-    {
-      id: 'p_hf1', uid: 'u_hf', time: now - 23 * 3600000,
-      content: '今日有帅知的山色极好，云在肩头，知在袖里。\n发一张昨日画的大帅知，与诸君共赏清欢。',
-      imgs: [svgArt('a')], likes: ['u_jyz', 'u_dm', 'u_jin', 'u_huan', 'u_qing', 'u_muyu']
-    },
-    {
-      id: 'p_dm1', uid: 'u_dm', time: now - 9 * 3600000,
-      content: '新抄了一阕《如梦令》，墨还未干。\ndoyoulovemelove知love清照，来我主页坐坐。',
-      imgs: [], likes: ['u_hf', 'u_jyz', 'u_tingxue', 'u_nanzhi']
-    },
-    {
-      id: 'p_jin1', uid: 'u_jin', time: now - 3 * 3600000,
-      content: '帮里的接龙记得接呀，一人一接，不可匿名——这是咱欺负全服的默契。',
-      imgs: [svgArt('b')], likes: ['u_hf', 'u_muyu']
-    },
-    {
-      id: 'p_yan1', uid: 'u_yanhui', time: now - 40 * 60000,
-      content: '秋风起，雁南回。愿诸君夜间皆有星光，白日自有烟火。',
-      imgs: [], likes: ['u_jyz']
-    }
-  ];
+  // 空白起步：榜单和动态都等真人产生，不塞假数据
+  users.forEach(u => { u.visitsTotal = 0; });
+  const posts = [];
 
   return {
     version: 2, registered: false, me: null, users, posts,
     rules: DEFAULT_RULES,
-    signups: [{
-      id: 's_1', title: '本周帮战接龙 · 清平乐欺负全服名单', creatorId: null, creatorName: '清平乐·司礼',
-      pinned: true, createdAt: now - 5 * 3600000, expiresAt: now + 19 * 3600000, closed: false,
-      entries: [
-        { uid: 'u_jyz', name: '大雪', time: now - 4 * 3600000, note: '熹微' },
-        { uid: 'u_jin', name: '中雪', time: now - 3 * 3600000, note: '珞霞' },
-        { uid: 'u_huan', name:'小雪', time: now - 2 * 3600000, note: '寰珮' }
-      ]
-    }],
-    polls: [{
-      id: 'v_1', title: '下月帮会活动，你想去哪儿？', creatorId: null, creatorName: '清平乐·司礼',
-      pinned: true, anonymous: false, createdAt: now - 6 * 3600000, expiresAt: now + 18 * 3600000,
-      closed: false, options: [
-        { text: '黄昏欺负全服', votes: ['u_jyz', 'u_hf', 'u_dx'] },
-        { text: '落日全服欺负', votes: ['u_jin', 'u_zx'] },
-        { text: '线上诗词雅集', votes: ['u_qing', 'u_xx', 'u_muyu'] }
-      ]
-    }],
-    stats: [{
-      id: 't_1', title: '本周帮贡统计表', creatorId: null, creatorName: '清平乐·司礼',
-      pinned: true, anonymous: true, createdAt: now - 8 * 3600000, expiresAt: now + 16 * 3600000,
-      closed: false, desc: '请填写本周帮贡与在线时长，每人每天限填一次，可匿名。',
-      fields: [{ key: 'gong', label: '本周帮贡' }, { key: 'hour', label: '在线时长（小时）' }],
-      entries: [{ uid: 'u_jyz', anonymous: false, values: { gong: '520', hour: '12' }, time: now - 5 * 3600000 }]
-    }],
-    notices: [{
-      id: 'n_1', authorId: null, authorName: '清平乐·司礼', pinned: true, published: true,
-      time: now - 26 * 3600000, publishAt: null,
-      content: '【开帮公告】\n清平乐自11月28日起，一应事务由即任大当家定夺。\n接龙必实名、投票可匿名、统计每日一填。愿诸君在此，各得一段醉清欢。',
-      imgs: []
-    }],
+    signups: [], polls: [], stats: [], notices: [],
     groups: [], groupMsgs: {}, dm: {}, reqs: [], flyflowers: [], updates: [], gnameReqs: [], tombs: [], rolesV: 0,
     visits, likes, seq: 0
   };
 }
-
-/* ---------- 清旧号（v6）：清空历史注册数据，从根上断掉「故人」重影 ---------- */
-const WIPE_V = 6;
-/* v6 强制清号已停用：它会误删真实注册用户并清空私聊，历史包袱到此为止。 */
-function purgeUsers(doc) { return doc; }
 
 function boot() {
   setTimeout(() => { try { if (!keyPoolReady) askKeyPass(); } catch (e) {} }, 1200);
@@ -744,7 +680,6 @@ function boot() {
   state = loadState();
   if (!state) { state = baseState(); saveState(); }
   if (!state.users) state = baseState();
-  // 清号逻辑已停用
 
   // 兼容旧数据：更新清平准则；移除本人置顶的「开帮」欢迎公告
   const OLD_RULE_HEAD = '一、芝兰同室，君子同芳';
@@ -849,8 +784,7 @@ function askKeyPass() {
 }
 const POLL_MS = 3000;
 const POLL_SLOW = 12000;   // 被限流时临时降速，别把钥匙打废
-// 数据文件迁到 qlz-data-2.json：旧版外壳/旧缓存还会往 qlz-data.json 里写入已清空的数据，
-// 换一份它们不认识的档案，旧客户端的破坏就落不到新数据上
+// 换到 -2 号档案文件，旧壳子不认识它，不会再把空壳写回来
 if (CLOUD.path === 'qlz-data.json') CLOUD.path = 'qlz-data-2.json';
 
 const SYNC_ARR = ['users', 'posts', 'signups', 'polls', 'stats', 'notices', 'groups', 'reqs', 'flyflowers', 'updates', 'gnameReqs', 'tombs'];
@@ -890,7 +824,7 @@ function normalizeDoc(doc) {
   if (doc.rolesV == null) doc.rolesV = 0;
   if (doc.wipeV == null) doc.wipeV = 0;
   if (typeof normalizeExtras === 'function') doc = normalizeExtras(doc);
-  // 墓碑生效：被合并/注销的账号 id 记在 delIds，任何读路径都不许让它们复活
+  // delIds 是墓碑，读的时候也过一遍
   if (Array.isArray(doc.delIds) && doc.delIds.length) {
     doc.users = (doc.users || []).filter(u => doc.delIds.indexOf(u.id) < 0);
     (doc.groups || []).forEach(g => { if (Array.isArray(g.members)) g.members = g.members.filter(id => doc.delIds.indexOf(id) < 0); });
@@ -1128,13 +1062,12 @@ async function ghRead(cond) {
   try { DB.etag = r.headers.get('ETag') || DB.etag; } catch (e) { }
   const j = await r.json();
   let doc = null;
-  // GitHub 的 Contents API 对超过 1 MB 的文件不再内联返回 content（encoding 为 none），
-  // 只给 download_url。以前就是这里被判成「云端读取为空」，于是整台设备拒写、同步停摆。
+  // Contents 接口对 1MB 以上的文件不回 content，只给 download_url
   if (j.content) {
     try { doc = JSON.parse(b64dec(j.content)); } catch (e) { doc = null; }
   }
   if (!doc && j.sha) {
-    // 超过 1MB 的文件，改走 Git Blobs 接口按 sha 取原文（上限 100MB，且允许跨域）
+    // 大文件走 blobs，按 sha 取原字节
     try {
       const br = await ghFetch(GHAPI + '/repos/' + CLOUD.owner + '/' + CLOUD.repo + '/git/blobs/' + j.sha, () => ({ headers: ghH(), cache: 'no-store' }));
       if (br.ok) {
@@ -1165,7 +1098,7 @@ async function ghFlush(p) {
     normalizeDoc(doc);
     applyPatchTo(doc, p);
     if (Array.isArray(doc.delIds) && doc.delIds.length) doc.users=doc.users.filter(u=>doc.delIds.indexOf(u.id)<0);
-    // 防收缩：任何一次写回都不允许让某个集合变少（旧版外壳/离线副本也冲不掉别人的数据）
+    // 写回前先比一比，集合不许变少
     try{
       SYNC_ARR.forEach(k=>{
         if(!Array.isArray(cur.doc[k]) || !Array.isArray(doc[k])) return;
@@ -1275,7 +1208,7 @@ async function ghPoll(force) {
   if (state.me && me()) { softRender(); if (typeof chatCtx !== 'undefined' && chatCtx) renderChat(); }
 }
 async function ghInit() {
-  // 还没输口令时没有密钥，别硬连：否则主屏会先蹦一句「云端未连上（GH 401）」，吓人
+  // 没解锁就先别连，省得首页弹 401
   if (!keyPoolReady) { DB.ready = false; DB.err = ''; return; }
   try {
     const cur = await ghRead();
@@ -1291,7 +1224,6 @@ async function ghInit() {
     if (doc && doc.users && doc.users.length) {
       state = normalizeDoc(Object.assign(doc, localAuth()));
       DB.last = snapshot();                     // 以云端旧数据为基线
-      if (state.wipeV !== WIPE_V) purgeUsers(state);   // 再清号，才能把删除推上去
       const u = findMine(state.users);
       if (u) setUid(u.id); else { state.me = null; state.regUid = null; }
     } else {
@@ -1416,7 +1348,6 @@ async function pullDoc(rev) {
   if (auth.me && !findMine(doc.users)) return;
   state = normalizeDoc(Object.assign(doc, auth));
   DB.last = snapshot();
-  if (state.wipeV !== WIPE_V) purgeUsers(state);
   const u = findMine(state.users);
   if (u) setUid(u.id); else { state.me = null; }
   DB.rev = rev;
@@ -1466,12 +1397,10 @@ async function cloudInit() {
         doc.users.push(localMe);
       }
     }
-    if (doc && doc.users && doc.users.length && doc.wipeV !== WIPE_V) { purgeUsers(doc); }
     if (doc && doc.users && doc.users.length) {
       state = normalizeDoc(Object.assign(doc, localAuth()));
       const u = findMine(state.users);
       if (u) setUid(u.id); else { state.me = null; state.regUid = null; }
-      if (doc.wipeV !== state.wipeV) { state.wipeV = WIPE_V; }
     } else {
       state = Object.assign(state, localAuth());
     }
@@ -1923,12 +1852,6 @@ async function register(name, avatar) {
       { id: uid('m'), from: 'u_hf', text: '今雨可为故雨？', time: Date.now() - 40000 }
     ];
   }
-
-  // 好友申请演示
-  state.reqs.unshift(
-    { id: uid('r'), from: 'u_hf', to: id, time: Date.now() - 1800000, status: 'pending' },
-    { id: uid('r'), from: 'u_dm', to: id, time: Date.now() - 900000, status: 'pending' }
-  );
 
   // 昨日榜单补一笔自己的数据
   const y = ymd(dayShift(-1));
