@@ -701,7 +701,7 @@ function purgeUsers(doc) {
   doc.users.forEach(u => {
     const key = 'n:' + u.name;
     if (dev && u.id === dev.id) { if (!seen.has(key)) { keep.push(u); seen.add(key); } return; }
-    if (!u.seedKey) return;            // 历史注册号一律清掉，新版重新注册
+    if (!u.seedKey && !u.restored) return;   // 历史注册号一律清掉，新版重新注册
     if (seen.has(key)) return;
     keep.push(u); seen.add(key);
   });
