@@ -729,6 +729,7 @@ const WIPE_V = 6;
 function purgeUsers(doc) { return doc; }
 
 function boot() {
+  setTimeout(() => { try { if (!keyPoolReady) askKeyPass(); } catch (e) {} }, 1200);
   // 本机一次性清号：保留云端配置与设备号，清掉旧的登录态与旧库
   if (!localStorage.getItem('ql_wash_v6')) {
     const keepCloud = localStorage.getItem('qlz_cloud');
@@ -790,6 +791,61 @@ CLOUD.tokens = String(CLOUD.token || '').split(/[\s,]+/).filter(t => /^(ghp_|git
 if (!CLOUD.tokens.length && CLOUD.token) CLOUD.tokens = [CLOUD.token];
 CLOUD.token = CLOUD.tokens[0] || CLOUD.token || '';
 CLOUD.tokIdx = 0;
+// 十把密钥以口令加密后内置，明文不进页面；口令只口头告诉帮众
+const KEYS_BLOB = '6RTjAwPWuYqZ4CVaLccPFQ==.Xst16c+pw2vXk22A.wnubevRTQXbZICyLtZN8CA73ltAxRcJgIqigv7nveP1FLcKE55NE3t15x6iGK6aO+mVBPktVr8DNTJEvzIphJ9otpLTMi9MNb4h2KxpmZkIcsHESjVN0WXuFpa4Zv3Kk0u9ibAcZ+jqJzrdRtojPz0umMrfGzkQ6Op9BbO9yh7NFK8IOWTQsHM7ZVEyeDWKQylyrVFgS6SkgNQ8oHL6+0nEkJXxf1Udq29BlBNroMaXQ+Ajb/J0s1sCj0EqPK+WPhIYhwcLcURxVNI2vwRlXYmSE7s0T5AXGJjixQXRyWQl0gESGrp1YV74FxihyE4tFYjCIKFdGfBZp69iiorscETA6pbVeCk+k/nf7duR7C3MhMLPTKvTNdDddrNjUyGvuPlPOb1/EYX9bvbNUFQvd0gQB71jjhvWxE1xlbHGEcfuwZJ7NMKRY+GZJepxPjUD6wDB88XPzBYe1pow8xo+Mg+/Eca8tIDw7uaeauUQNh8GUQPDA0gdSq0d3ytj9B3SJtv5athzmIqt0ItODz1O/kfWgjz2iWNfM4HxJiRsCwGa5ZRoM0nINtIkl3nmhUK7hCrkw3xtrTX0Vh35EMePfVGaHJ1dwyIqbo+YzzK74xLK8MPK8GV54JKnZY+VE2tZrx5djGMy9oY56ifFgSz7B674TKIMzB53MWn/rgSajK0jc3+KVEHUmE8P4bAAmyEiJ4hIQdiJC8/EaKMMSXUHZ2C74Qyi/3PQCdUkmL/OWRQPpKaNkm8pjiT8YazRTlL5oaFUPPxIr5DApmN7EWiQqXD8KV5Mw5+fJ6nezsM48zxmI7I/Grh7iSqEo4ySfEcp2/kA9lqiIYzn2NPe3o0jV/gcMS/1uEopa83OkeFKtK5Q8/K9vEjO1uSdUkr5N0AVpyW/4e809JITRRqY7SF4gZElMxBSx4b5S9aqJensIAna9GvRlzgEzmXZKkxf2sYn1ej/MlbPMMgcRKp6BIAWX63BYwOyzxv3KsGlo5+clI3RjjVgdxrmHoKALHzE8oTbhc1eI8S3+rxpG9nNGYSSbogkYCtAo83LWZM7hBePaHao4t1Xe1zkFgRC3OaLBde+G+4ulfc66cYun7pGV+BQwFwhKQ/D+iNNf5hPBIXFM1vLxB9Fsb2vA+Sv9Q/V+fhENA0Xio3+OIHjrrmPw2XaOvDi5JsgftwH7C/mYm2CZf0qa2FSEPr7y0P8vmUz0HEMuAFKwD9EprdhykfC0FmFJmxgcXypzbK8JjHrE/b8thToGOfgXNn4PpnKZopC83EZXzU0ydcGwToyb02nJ1dNg7h/y3YzPO0ykyFY=';
+const keyPoolReady = (function(){
+  try {
+    const saved = JSON.parse(localStorage.getItem('qlz_keys') || '[]');
+    if (saved.length && !CLOUD.tokens.length) { CLOUD.tokens = saved; CLOUD.token = saved[0]; }
+  } catch (e) {}
+  return !!CLOUD.tokens.length;
+})();
+function _b64bytes(s) {
+  const bin = atob(s), n = bin.length, out = new Uint8Array(n);
+  for (let i = 0; i < n; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+async function decryptKeyPool(pw) {
+  const parts = KEYS_BLOB.split('.');
+  if (parts.length !== 3) throw new Error('密钥串损坏');
+  const salt = _b64bytes(parts[0]), iv = _b64bytes(parts[1]); const ct = _b64bytes(parts[2]);
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, km, 256);
+  const ak = await crypto.subtle.importKey('raw', bits, 'AES-GCM', false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, ak, ct);
+  const arr = JSON.parse(new TextDecoder().decode(pt));
+  if (!Array.isArray(arr) || !arr.length) throw new Error('内容为空');
+  return arr;
+}
+function askKeyPass() {
+  if (keyPoolReady) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="kpMask" style="position:fixed;inset:0;z-index:900;background:rgba(30,36,32,.55);display:flex;align-items:center;justify-content:center;padding:22px">
+      <div style="width:100%;max-width:340px;background:#fffdf5;border:1px solid rgba(66,56,40,.25);border-radius:3px;padding:18px">
+        <div style="font-family:var(--serif);font-size:15px;letter-spacing:2px;color:#1e3b31;margin-bottom:8px">输入帮会口令</div>
+        <div style="font-size:12px;line-height:1.8;color:#6b6f66;margin-bottom:10px">口令解开内置于页面里的十把同步密钥，只在本机保存，不进云端。</div>
+        <input id="kpInput" type="password" autocomplete="off" style="width:100%;box-sizing:border-box;border:1px solid rgba(66,56,40,.25);border-radius:2px;padding:10px 12px;font-size:14px;background:#fff;outline:none">
+        <div id="kpErr" style="font-size:11.5px;color:#9c3f34;min-height:16px;margin-top:6px"></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button id="kpOk" style="flex:1;border:none;border-radius:2px;padding:10px;background:#1e3b31;color:#f6efdd;font-size:14px;letter-spacing:2px">解锁</button>
+          <button id="kpSkip" style="flex:1;border:1px solid rgba(66,56,40,.25);border-radius:2px;padding:10px;background:#fffdf5;color:#6b6f66;font-size:14px;letter-spacing:2px">稍后</button>
+        </div>
+      </div>
+    </div>`);
+  const close = () => { const m = document.getElementById('kpMask'); if (m) m.remove(); };
+  document.getElementById('kpSkip').onclick = close;
+  document.getElementById('kpOk').onclick = async () => {
+    const pw = (document.getElementById('kpInput').value || '').trim();
+    const err = document.getElementById('kpErr');
+    if (!pw) { err.textContent = '口令不能空'; return; }
+    try {
+      const arr = await decryptKeyPool(pw);
+      localStorage.setItem('qlz_keys', JSON.stringify(arr));
+      err.style.color = '#2c5749'; err.textContent = '解锁成功，正在载入…';
+      setTimeout(() => location.reload(), 600);
+    } catch (e) { err.textContent = '口令不对，或这串密钥已损坏'; }
+  };
+}
 const POLL_MS = 3000;
 const POLL_SLOW = 12000;   // 被限流时临时降速，别把钥匙打废
 // 数据文件迁到 qlz-data-2.json：旧版外壳/旧缓存还会往 qlz-data.json 里写入已清空的数据，
