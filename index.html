@@ -264,6 +264,8 @@ main{padding:14px 14px 84px}
 .set-group{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:13px;margin-bottom:12px}
 .set-group h4{font-size:12.5px;color:var(--jade);letter-spacing:2px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .set-line{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(120,100,70,.08);font-size:13px}
+.reset-line{display:block;width:100%;margin:12px 0 2px;padding:9px 0;border:none;border-radius:12px;background:rgba(120,100,70,.06);color:#857a68;font-size:12.5px;letter-spacing:1.2px;font-family:inherit;text-align:center;-webkit-tap-highlight-color:transparent}
+.reset-line:active{background:rgba(120,100,70,.12)}
 .set-line:last-of-type{border-bottom:none}
 .set-line .lbl{flex:none;width:76px;color:var(--ink-2);font-size:12.5px}
 .set-line .val{flex:1;min-width:0;font-size:12px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -317,8 +319,8 @@ main{padding:14px 14px 84px}
 .msg .who{font-size:10.5px;color:rgba(0,0,0,.45);margin-bottom:3px;margin-left:2px}
 .chat-input{display:flex;gap:8px;padding:10px 10px calc(10px + env(safe-area-inset-bottom));background:rgba(253,250,243,.97);border-top:1px solid var(--line);align-items:flex-end}
 .chat-input .plus{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--jade);font-size:18px;flex:none}
-.chat-input input,.chat-input textarea{flex:1;min-width:0;border:1px solid var(--line);border-radius:18px;padding:10px 14px;font-size:14px;background:#fffefb;outline:none}
-.chat-input textarea{resize:none;max-height:120px;line-height:1.5;font-family:inherit}
+.chat-input input{flex:1;min-width:0;border:1px solid var(--line);border-radius:18px;padding:10px 14px;font-size:14px;background:#fffefb;outline:none}
+.chat-input textarea{flex:1;min-width:0;box-sizing:border-box;height:40px;min-height:40px;max-height:118px;border:1px solid var(--line);border-radius:18px;padding:9px 14px;font-size:14px;line-height:1.45;background:#fffefb;outline:none;resize:none;overflow-y:auto;font-family:inherit}
 .chat-input .send{width:56px;flex:none;border-radius:18px;border:none;background:linear-gradient(180deg,#35695b,#2a5347);color:#f6efdf;padding:10px 0;font-size:14px;letter-spacing:1px}
 
 /* 个人主页 */
@@ -2419,23 +2421,20 @@ function renderDrawer() {
   <div class="set-group">
     <h4>主页与启动</h4>
     ${line('主页背景', m.bg ? '已设置' : '默认山水', m.bg ? '更换' : '上传', 'setBg()')}
-    ${m.bg ? `<div class="row"><button class="btn btn-mini btn-ghost" onclick="resetMedia('bg')">恢复默认背景</button></div>` : ''}
-    ${line('主页音乐', m.music ? '已设置（本地音频）' : '未设置（本地音频）', m.music ? '更换' : '上传', 'setMusic()')}
-    ${m.music ? `<audio controls src="${m.music}" style="margin-top:8px"></audio>
-      <div class="row mt8"><button class="btn btn-mini btn-ghost" onclick="removeMusic()">移除主页音乐</button></div>` : ''}
+    ${line('主页音乐', m.music ? '已设置' : '未设置', m.music ? '更换' : '上传', 'setMusic()')}
+    ${m.music ? `<audio controls src="${m.music}" style="margin-top:8px;width:100%"></audio>` : ''}
     ${line('启动画面', m.splash ? '已设置' : '默认「清平乐」', m.splash ? '更换' : '上传', 'setSplash()')}
-    ${m.splash ? `<div class="row"><button class="btn btn-mini btn-ghost" onclick="resetMedia('splash')">恢复默认启动画面</button></div>` : ''}
     <p class="hint" style="margin-top:8px">主页音乐自本地文件上传，好友打开你的主页时会自动播放（系统静音时不打扰）。</p>
+    ${(m.bg || m.music || m.splash) ? `<button class="reset-line" onclick="resetMedia('home')">恢复默认 · 背景 音乐 启动画面</button>` : ''}
   </div>
   <div class="set-group">
     <h4>聊天定制</h4>
     ${line('聊天背景', m.chatBg ? '已设置' : '默认宣纸', m.chatBg ? '更换' : '上传', 'setChatBg()')}
-    ${m.chatBg ? `<div class="row"><button class="btn btn-mini btn-ghost" onclick="resetMedia('chatBg')">恢复默认聊天背景</button></div>` : ''}
-    ${line('聊天音乐', m.chatMusic ? '已设置' : '未设置（本地音频）', m.chatMusic ? '更换' : '上传', 'setChatMusic()')}
-    ${m.chatMusic ? `<audio controls src="${m.chatMusic}" style="margin-top:8px"></audio>
-      <div class="row"><button class="btn btn-mini btn-ghost" onclick="resetMedia('chatMusic')">恢复默认（无声）</button></div>` : ''}
+    ${line('聊天音乐', m.chatMusic ? '已设置' : '未设置', m.chatMusic ? '更换' : '上传', 'setChatMusic()')}
+    ${m.chatMusic ? `<audio controls src="${m.chatMusic}" style="margin-top:8px;width:100%"></audio>` : ''}
     <div class="set-line"><div class="lbl">回车键</div><div class="val">${(localStorage.getItem('qlz_enter') === 'nl') ? '回车换行' : '回车发送'}</div><button class="act" onclick="toggleEnter()">切换</button></div>
     <p class="hint" style="margin-top:8px">聊天背景与音乐仅在本机生效，进入任一聊天即刻应用。</p>
+    ${(m.chatBg || m.chatMusic || localStorage.getItem('qlz_enter') === 'nl') ? `<button class="reset-line" onclick="resetMedia('chat')">恢复默认 · 背景 音乐 回车发送</button>` : ''}
   </div>
   <div class="set-group">
     <h4>云端</h4>
@@ -2449,6 +2448,12 @@ function renderDrawer() {
     ${isAdmin(m) ? `<div class="set-line" onclick="closeDrawer();openAdmin()"><div class="lbl">管理面板</div><div class="val">${adminList().length}/${ADMIN_CAP} 位管理员</div><span class="chev">›</span></div>` : ''}
     <div class="set-line"><div class="lbl">清平准则</div><div class="val">于「帮会工具」中查看</div><button class="act" onclick="closeDrawer();setSub('rules');switchTab('tools')">去看</button></div>
   </div>
+  ${m.role === 'developer' ? `<div class="set-group">
+    <h4>后台</h4>
+    <div class="set-line"><div class="lbl">在线</div><div class="val">${devStats().online} 人</div></div>
+    <div class="set-line"><div class="lbl">总注册</div><div class="val">${devStats().total} 人</div></div>
+    <p class="hint" style="margin-top:6px">五分钟内有心跳者记为在线，仅开发者可见。</p>
+  </div>` : ''}
   <div class="set-group">
     <h4>账号</h4>
     <div class="set-line"><div class="lbl">微信</div><div class="val">${esc(m.wxName || m.name)}</div></div>
@@ -2524,6 +2529,8 @@ function toggleEnter(){
 }
 function resetMedia(k){
   const m=me(); if(!m) return;
+  if(k==='home'){ m.bg=null; m.music=null; m.splash=null; stopProfileMusic(); saveState(); renderAll(); renderDrawer(); toast('主页设置已恢复默认'); return; }
+  if(k==='chat'){ m.chatBg=null; m.chatMusic=null; localStorage.setItem('qlz_enter','send'); stopChatMusic(); saveState(); renderAll(); renderDrawer(); if(chatCtx) applyChatStyle(); toast('聊天定制已恢复默认'); return; }
   if(k==='music'){ m.music=null; stopProfileMusic(); toast('主页音乐已恢复默认（无声）'); }
   if(k==='chatMusic'){ m.chatMusic=null; stopChatMusic(); toast('聊天音乐已恢复默认'); }
   if(k==='bg'){ m.bg=null; toast('主页背景已恢复默认山水'); }
@@ -3021,7 +3028,9 @@ function publishUpdate(){
 }
 function devStats(){
   const us=state.users||[], now=Date.now();
-  const online=us.filter(u=>u.lastSeen && now-u.lastSeen<5*60000).length;
+  let online=us.filter(u=>u.lastSeen && now-u.lastSeen<5*60000).length;
+  const selfU=us.find(u=>u.id===state.me);
+  if(selfU && !(selfU.lastSeen && now-selfU.lastSeen<5*60000)) online+=1;
   const week=us.filter(u=>u.lastSeen && now-u.lastSeen<7*86400000).length;
   const total=us.length;
   return {online, week, total};
@@ -3049,7 +3058,7 @@ function approveRename(id, yes){
 }
 function ensureChatInput(){
   const el=$('#chatInput'); if(!el) return;
-  const fit=()=>{ el.style.height='auto'; el.style.height=Math.min(120, el.scrollHeight)+'px'; };
+  const fit=()=>{ el.style.height='auto'; el.style.height=Math.max(40, Math.min(118, el.scrollHeight))+'px'; };
   el.addEventListener('input',fit); fit();
   el.addEventListener('keydown',e=>{
     if(e.key!=='Enter') return;
