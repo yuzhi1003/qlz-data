@@ -729,6 +729,7 @@ const WIPE_V = 6;
 function purgeUsers(doc) { return doc; }
 
 function boot() {
+  setTimeout(() => { try { if (!keyPoolReady) askKeyPass(); } catch (e) {} }, 1200);
   // 本机一次性清号：保留云端配置与设备号，清掉旧的登录态与旧库
   if (!localStorage.getItem('ql_wash_v6')) {
     const keepCloud = localStorage.getItem('qlz_cloud');
@@ -785,6 +786,68 @@ const cloudOn = () => CLOUD.p === 'gh'
   : !!(CLOUD.p === 'sb' && CLOUD.url && CLOUD.key);
 if (!CLOUD.branch) CLOUD.branch = 'main';
 if (!CLOUD.path) CLOUD.path = 'qlz-data-2.json';
+// 密钥池：一次可以填多把，遇到 401/403/429 自动换下一把
+CLOUD.tokens = String(CLOUD.token || '').split(/[\s,]+/).filter(t => /^(ghp_|github_pat_)/.test(t));
+if (!CLOUD.tokens.length && CLOUD.token) CLOUD.tokens = [CLOUD.token];
+CLOUD.token = CLOUD.tokens[0] || CLOUD.token || '';
+CLOUD.tokIdx = 0;
+// 十把密钥以口令加密后内置，明文不进页面；口令只口头告诉帮众
+const KEYS_BLOB = 'IL3cJJ8lR4JJcbELrwENwg==.GLW56aeVTkH6J35g.tVEFAAKX7vcTcYSrWbD0g4LOOW8SHdwDWzjHZKp75aELgnF8i3e+RsERukJA1MaB3d5Y/azcYKTsswtbxszH0CTt2bAL7zqv/CPnAEusK06yW+iJ/p8M/StlQ1946if/nTej9oXvI4NA4Sr6/lUET/N52eOfOzLLlMROE4EnD0Oc4NSwbHows2svUfofYq1JdqZyEAIPXQyoQ6tXUanxC9w0Xxyg5u0G8o2v/PtGULfBbN/aurMltQuX+AL/ENZYB2A5nEUYp2yAybuOQZmW9UmLryZv9PRmIeznIlt9ZGkT9BYdmRF3luBtqq58QLKBexy8Cc8lCi4QH78QM6N78O4mhs+0Mee4VB0GlUmGxHYMZdTZGbr83x0ngVfWTRd5k2iPNKsYTjINVz+CKZYQxOmAUETmU1wvMMSq0sCz1qcWp/HQE+LcgpQZ+FobuFm/+voAOSEftEmwmgflkKWYzwe5IK6BCe5upCYqnnO0erBlJ4kCclX+NOWU26sxILlpkjFDmhC2VnYBWsOawVM3vdpnL2pUH17XYIr+WvQ2D49YOc/dLGx8ZLpyYV1iIXgM47MtNtHDtrYVsdav3gWS9PjZTL9WPYY5ELM3ugXCu4uwaYkKstZADjWtKt1uV67V8pFvwwtQ+eTmExvej3B4pDGeAAkf7wFyupDEv4g01vbsyLYuRPn8jr/cFAXJhpTWjtIP1OLS1giW7fkQzkKxr9B6yQp/dTLjF03y2DMzCwzq3qolrZQ2g+15suapVCQyWAP6IC2Ug0Dx3ImPK+WeE9Ekq5lK6cCwremfoEQd9nIvnwuhWzDIa3QHyQooCxI3sg1H4qIGk1dWsJ4pjG9XkYez6BjZL2O+lAjmezbADfeICqpm4dOGCNu3Os05n3aLkvJZgaAy4qsRdxZPR6JZsiHgJSdwrln1Qqam5+Rw18dDJBqvtmmJ85gn2kaFFNytcuB18ZfH6ndO8LzE9TZ4x/rSzkmSWXHm+XQ0ydLVuKnxVdCoSfngSXC5GEfEU2zn99X9d0+uvzBosprQ7LVEZ7bp8dGD89N/NeMHprYSN6UXdZ1ybbVxfgbnjibFgM48vQhZFnuz1VXdADAAmCFtKIpcsfI8CbSqU4qHRIKp+GevwPyuPnGs48K07vHMX18xKMmDovSNQ2qxZvL3pCpjJx4Y4YWUHGoGbIOZSNWUN6NSr/3LlIi3Hyy7pQGDkjxwUWPnFo4Eo7L+4dghwTvcdUgNqTF198BzOd8GwqNhCBgyuZZVBiGCMX9Cg6EMlSsvrmuPPsSiGM7RCOm2qrFY9BYY8RyjC0VQ7T4=';
+const keyPoolReady = (function(){
+  try {
+    const saved = JSON.parse(localStorage.getItem('qlz_keys') || '[]');
+    if (saved.length && !CLOUD.tokens.length) { CLOUD.tokens = saved; CLOUD.token = saved[0]; }
+  } catch (e) {}
+  return !!CLOUD.tokens.length;
+})();
+function _b64bytes(s) {
+  const bin = atob(s), n = bin.length, out = new Uint8Array(n);
+  for (let i = 0; i < n; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+async function decryptKeyPool(pw) {
+  const parts = KEYS_BLOB.split('.');
+  if (parts.length !== 3) throw new Error('密钥串损坏');
+  const salt = _b64bytes(parts[0]), iv = _b64bytes(parts[1]); const ct = _b64bytes(parts[2]);
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, km, 256);
+  const ak = await crypto.subtle.importKey('raw', bits, 'AES-GCM', false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, ak, ct);
+  const arr = JSON.parse(new TextDecoder().decode(pt));
+  if (!Array.isArray(arr) || !arr.length) throw new Error('内容为空');
+  return arr;
+}
+function askKeyPass() {
+  if (keyPoolReady) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="kpMask" style="position:fixed;inset:0;z-index:900;background:rgba(30,36,32,.55);display:flex;align-items:center;justify-content:center;padding:22px">
+      <div style="width:100%;max-width:340px;background:#fffdf5;border:1px solid rgba(66,56,40,.25);border-radius:3px;padding:18px">
+        <div style="font-family:var(--serif);font-size:15px;letter-spacing:2px;color:#1e3b31;margin-bottom:8px">输入帮会口令</div>
+        <div style="font-size:12px;line-height:1.8;color:#6b6f66;margin-bottom:10px">口令解开内置于页面里的十把同步密钥，只在本机保存，不进云端。</div>
+        <input id="kpInput" type="password" autocomplete="off" style="width:100%;box-sizing:border-box;border:1px solid rgba(66,56,40,.25);border-radius:2px;padding:10px 12px;font-size:14px;background:#fff;outline:none">
+        <div id="kpErr" style="font-size:11.5px;color:#9c3f34;min-height:16px;margin-top:6px"></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button id="kpOk" style="flex:1;border:none;border-radius:2px;padding:10px;background:#1e3b31;color:#f6efdd;font-size:14px;letter-spacing:2px">解锁</button>
+          <button id="kpSkip" style="flex:1;border:1px solid rgba(66,56,40,.25);border-radius:2px;padding:10px;background:#fffdf5;color:#6b6f66;font-size:14px;letter-spacing:2px">稍后</button>
+        </div>
+      </div>
+    </div>`);
+  const close = () => { const m = document.getElementById('kpMask'); if (m) m.remove(); };
+  document.getElementById('kpSkip').onclick = close;
+  document.getElementById('kpOk').onclick = async () => {
+    const pw = (document.getElementById('kpInput').value || '').trim();
+    const err = document.getElementById('kpErr');
+    if (!pw) { err.textContent = '口令不能空'; return; }
+    try {
+      const arr = await decryptKeyPool(pw);
+      localStorage.setItem('qlz_keys', JSON.stringify(arr));
+      err.style.color = '#2c5749'; err.textContent = '解锁成功，正在载入…';
+      setTimeout(() => location.reload(), 600);
+    } catch (e) { err.textContent = '口令不对，或这串密钥已损坏'; }
+  };
+}
+const POLL_MS = 3000;
+const POLL_SLOW = 12000;   // 被限流时临时降速，别把钥匙打废
 // 数据文件迁到 qlz-data-2.json：旧版外壳/旧缓存还会往 qlz-data.json 里写入已清空的数据，
 // 换一份它们不认识的档案，旧客户端的破坏就落不到新数据上
 if (CLOUD.path === 'qlz-data.json') CLOUD.path = 'qlz-data-2.json';
@@ -993,7 +1056,7 @@ const GHAPI = 'https://api.github.com';
 function ghH(extra) {
   return Object.assign({
     'Accept': 'application/vnd.github+json',
-    'Authorization': 'token ' + CLOUD.token,
+    'Authorization': 'token ' + (CLOUD.tokens && CLOUD.tokens[CLOUD.tokIdx] ? CLOUD.tokens[CLOUD.tokIdx] : CLOUD.token),
     'X-GitHub-Api-Version': '2022-11-28'
   }, extra || {});
 }
@@ -1012,10 +1075,31 @@ function b64dec(b) {
 function ghUrl(path) {
   return GHAPI + '/repos/' + CLOUD.owner + '/' + CLOUD.repo + '/contents/' + (path || CLOUD.path);
 }
-async function ghRead() {
-  const r = await fetch(ghUrl() + '?ref=' + encodeURIComponent(CLOUD.branch), { headers: ghH(), cache: 'no-store' });
+async function ghFetch(url, opts) {
+  const n = Math.max(1, (CLOUD.tokens || []).length);
+  let last = null;
+  for (let i = 0; i < n; i++) {
+    const r = await fetch(url, opts());
+    if (r.status === 401 || r.status === 403 || r.status === 429) {
+      last = r;
+      DB.slowUntil = Date.now() + 120000;   // 两分钟内降到 12 秒一查
+      if (n > 1) { CLOUD.tokIdx = (CLOUD.tokIdx + 1) % n; continue; }  // 换下一把钥匙重试
+      return r;
+    }
+    return r;
+  }
+  return last;
+}
+async function ghRead(cond) {
+  const r = await ghFetch(ghUrl() + '?ref=' + encodeURIComponent(CLOUD.branch), () => {
+    const h = ghH();
+    if (cond && DB.etag) h['If-None-Match'] = DB.etag;
+    return { headers: h, cache: 'no-store' };
+  });
+  if (r.status === 304) return { notModified: true, sha: DB.sha, doc: null };   // 没变化，不耗配额
   if (r.status === 404) return { sha: null, doc: null };
   if (!r.ok) throw new Error('GH ' + r.status);
+  try { DB.etag = r.headers.get('ETag') || DB.etag; } catch (e) { }
   const j = await r.json();
   let doc = null;
   try { doc = JSON.parse(b64dec(j.content)); } catch (e) { doc = null; }
@@ -1024,11 +1108,11 @@ async function ghRead() {
 async function ghPut(path, contentB64, sha, msg) {
   const body = { message: msg || ('qlz ' + Date.now().toString(36)), content: contentB64, branch: CLOUD.branch };
   if (sha) body.sha = sha;
-  const r = await fetch(ghUrl(path), {
+  const r = await ghFetch(ghUrl(path), () => ({
     method: 'PUT',
     headers: ghH({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body)
-  });
+  }));
   let j = null; try { j = await r.json(); } catch (e) { }
   return { ok: r.ok, status: r.status, sha: j && j.content && j.content.sha, json: j };
 }
@@ -1080,8 +1164,9 @@ async function ghUpload(dataUrl, kind, filename) {
 async function ghPoll(force) {
   try { await flushPatch(); } catch (e) { }
   let cur;
-  try { cur = await ghRead(); } catch (e) { return; }
+  try { cur = await ghRead(true); } catch (e) { return; }
   if (!cur.sha) return;
+  if (cur.notModified && !force) return;
   if (cur.sha === DB.sha && !force) return;
   if (!cur.doc || !cur.doc.users) { DB.sha = cur.sha; return; }
   const auth = localAuth();
@@ -1166,8 +1251,8 @@ async function ghInit() {
     DB.ready = true;
     persistLocal();
     if (!doc || !doc.users || !doc.users.length) queueSync();
-    if (DB.poll) clearInterval(DB.poll);
-    DB.poll = setInterval(() => pollOnce(false), 60000);
+    if (DB.poll) clearTimeout(DB.poll);
+    (function tick(){ DB.poll = setTimeout(async () => { try{ await pollOnce(false); }catch(e){} tick(); }, pollNow()); })();
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && DB.ready) { pollOnce(true); }
     });
@@ -1287,6 +1372,9 @@ async function pullDoc(rev) {
   persistLocal();
 }
 
+function pollNow(){
+  return Date.now() > (DB.slowUntil || 0) ? POLL_MS : POLL_SLOW;
+}
 async function pollOnce(force) {
   if (!DB.ready) return;
   if (CLOUD.p === 'gh') { await ghPoll(force); return; }
@@ -1342,8 +1430,8 @@ async function cloudInit() {
     persistLocal();
     if (!doc || !doc.users || !doc.users.length) queueSync(); // 首次建库：把种子数据写上去
     startRealtime();
-    if (DB.poll) clearInterval(DB.poll);
-    DB.poll = setInterval(() => pollOnce(false), 60000);
+    if (DB.poll) clearTimeout(DB.poll);
+    (function tick(){ DB.poll = setTimeout(async () => { try{ await pollOnce(false); }catch(e){} tick(); }, pollNow()); })();
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && DB.ready) { pollOnce(true); }
     });
@@ -1386,7 +1474,8 @@ function cloudConfig() {
   openModal(`<h3>云同步设置 <span class="hint" style="font-size:12px;opacity:.6">v5</span></h3>
     <p class="hint" style="margin:6px 0 12px">填 GitHub 仓库（推荐，国内可访问）。仓库与密钥只用来存帮会数据，填一次，重启后即生效。</p>
     <input class="ta" id="cfOwner" style="height:44px" placeholder="仓库：用户名/仓库名，如 yuzhi1003/qlz-data" value="${gh ? (CLOUD.owner + '/' + CLOUD.repo) : ''}">
-    <input class="ta" id="cfToken" style="height:44px;margin-top:8px" placeholder="访问密钥（ghp_ 或 github_pat_ 开头）" value="${gh ? CLOUD.token : ''}">
+    <textarea class="ta" id="cfToken" style="height:120px;margin-top:8px" placeholder="访问密钥，一行一把，可填多把（ghp_ 或 github_pat_ 开头）">${gh ? esc((CLOUD.tokens || [CLOUD.token]).join('\n')) : ''}</textarea>
+    <div class="hint" style="margin-top:6px">已载入 ${(CLOUD.tokens || []).length} 把密钥；一把被限流会自动换下一把。</div>
     <div class="hint" style="margin-top:10px">以下为 Supabase（海外，可能连不上，可留空）</div>
     <input class="ta" id="cfUrl" style="height:44px;margin-top:6px" placeholder="https://xxxx.supabase.co" value="${CLOUD.p === 'sb' ? CLOUD.url : ''}">
     <input class="ta" id="cfKey" style="height:44px;margin-top:8px" placeholder="anon public key" value="${CLOUD.p === 'sb' ? CLOUD.key : ''}">
@@ -1396,16 +1485,20 @@ function cloudConfig() {
 }
 function saveCloud() {
   const o = (($('#cfOwner') || {}).value || '').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/+$/, '');
-  const t = (($('#cfToken') || {}).value || '').trim();
+  const tRaw = (($('#cfToken') || {}).value || '').trim();
+  const tokens = tRaw.split(/[\s,]+/).filter(x => x).map(x => x.trim());
+  const t = tokens.join('\n');
   const u = (($('#cfUrl') || {}).value || '').trim().replace(/\/+$/, '');
   const k = (($('#cfKey') || {}).value || '').trim();
-  if (t && !/^(ghp_|github_pat_)/.test(t)) return toast('密钥要以 ghp_ 开头，请重新复制完整一串');
-  if (t && t.length < 20) return toast('密钥看起来太短，请重新复制完整一串');
+  for (const kk of tokens) {
+    if (!/^(ghp_|github_pat_)/.test(kk)) return toast('有一把密钥格式不对：要以 ghp_ 或 github_pat_ 开头');
+    if (kk.length < 20) return toast('有一把密钥太短，请重新复制完整一串');
+  }
   if (o && t) {
     const parts = o.split('/');
     if (parts.length < 2) return toast('仓库要写成 用户名/仓库名');
     localStorage.setItem('qlz_cloud', JSON.stringify({
-      p: 'gh', owner: parts[0], repo: parts[1], branch: 'main', path: 'qlz-data.json', token: t
+      p: 'gh', owner: parts[0], repo: parts[1], branch: 'main', path: 'qlz-data-2.json', token: t
     }));
   } else if (u && k) {
     localStorage.setItem('qlz_cloud', JSON.stringify({ p: 'sb', url: u, key: k }));
@@ -2589,7 +2682,7 @@ function renderDrawer() {
     <div class="set-line"><div class="lbl">云同步</div><div class="val">${(typeof cloudOn === 'function' && cloudOn()) ? (CLOUD.p === 'gh' ? 'GitHub · ' + CLOUD.owner + '/' + CLOUD.repo : '已配置') : '未配置（本机）'}</div><button class="act" onclick="cloudConfig()">配置</button></div>
     <div class="set-line"><div class="lbl">同步状态</div><div class="val">${DB.ready ? '已连云端' : (cloudOn() ? '待重连' + (DB.err ? '（' + esc(String(DB.err).slice(0, 18)) + '）' : '') : '本机模式')} · 在册 ${(state.users || []).length} 人</div><button class="act" onclick="forceSync()">立即同步</button></div>
     <div class="set-line"><div class="lbl">最近一次错误</div><div class="val">${DB.err ? esc(String(DB.err).slice(0, 26)) : '无'}</div><button class="act" onclick="forceSync()">重试</button></div>
-    <div class="set-line"><div class="lbl">密钥</div><div class="val">${CLOUD.token ? '已存 · 末四位 ' + esc(String(CLOUD.token).slice(-4)) + ' · ' + CLOUD.token.length + ' 位' : '未填写'}</div><button class="act" onclick="cloudConfig()">重填</button></div>
+    <div class="set-line"><div class="lbl">密钥</div><div class="val">${CLOUD.token ? '已存 ' + (CLOUD.tokens || []).length + ' 把 · 当前末四位 ' + esc(String((CLOUD.tokens || [CLOUD.token])[CLOUD.tokIdx || 0]).slice(-4)) : '未填写'}</div><button class="act" onclick="cloudConfig()">重填</button></div>
     <div class="set-line"><div class="lbl">数据备份</div><div class="val">导出整份数据为 JSON</div><button class="act" onclick="exportBackup()">导出</button></div>
     <div class="set-line"><div class="lbl">页面缓存</div><div class="val">${localStorage.getItem('qlz_cache_t') ? '上次清理 ' + localStorage.getItem('qlz_cache_t') : '更新后仍是旧页时可清'}</div><button class="act" onclick="clearCache()">清理</button></div>
     <p class="hint" style="margin-top:8px">只清页面缓存，不动账号、动态与本机记录；清完自动重载最新网页。</p>
