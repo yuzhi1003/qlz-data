@@ -829,6 +829,9 @@ function normalizeDoc(doc) {
     doc.users = (doc.users || []).filter(u => doc.delIds.indexOf(u.id) < 0);
     (doc.groups || []).forEach(g => { if (Array.isArray(g.members)) g.members = g.members.filter(id => doc.delIds.indexOf(id) < 0); });
   }
+  // 申请两端都得是活人，销号留下的申请清掉
+  const liveIds = new Set((doc.users || []).map(u => u.id));
+  doc.reqs = (doc.reqs || []).filter(r => liveIds.has(r.from) && liveIds.has(r.to));
   return doc;
 }
 
@@ -2460,9 +2463,9 @@ function addFriends(a, b) {
 
 function renderFriends() {
   const m = me();
-  const incoming = state.reqs.filter(r => r.to === m.id && r.status === 'pending');
-  const outgoing = state.reqs.filter(r => r.from === m.id && r.status !== 'pending').slice(0, 6);
-  const sentPending = state.reqs.filter(r => r.from === m.id && r.status === 'pending');
+  const incoming = state.reqs.filter(r => r.to === m.id && r.status === 'pending' && userById(r.from));
+  const outgoing = state.reqs.filter(r => r.from === m.id && r.status === 'accepted').slice(0, 6);
+  const sentPending = state.reqs.filter(r => r.from === m.id && r.status === 'pending' && userById(r.to));
   const friends = m.friends.map(id => userById(id)).filter(Boolean);
   const others = state.users.filter(u => u.id !== m.id);
 
@@ -2570,7 +2573,10 @@ function decideReq(rid, yes) {
 function withdrawReq(rid) {
   const r = (state.reqs || []).find(x => x.id === rid);
   if (!r) return;
-  state.reqs = state.reqs.filter(x => x.id !== rid);
+  // 记录不能删：删了本机干净，云端那条还在，下次同步又被顶回来
+  (state.reqs || []).forEach(x => {
+    if (x.from === state.me && x.to === r.to && x.status === 'pending') { x.status = 'withdrawn'; x.time = Date.now(); }
+  });
   try {
     const k = 'qlz_pend_' + state.me;
     const arr = JSON.parse(localStorage.getItem(k) || '[]').filter(x => x !== r.to);
@@ -2945,7 +2951,7 @@ function unreadTotal() {
   ((me() && me().friends) || []).forEach(fid => { if (userById(fid)) n += unreadOf('dm', fid); });
   const rm = readMap();
   const seenReq = rm['req'] || 0;
-  n += (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending' && (r.time || 0) > seenReq).length;
+  n += (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending' && userById(r.from) && (r.time || 0) > seenReq).length;
   return n;
 }
 function unreadChat() {
@@ -3008,7 +3014,7 @@ function watchReqs() {
     if (!state.me) return;
     const sk = 'qlz_req_seen_' + state.me;
     let seen = []; try { seen = JSON.parse(localStorage.getItem(sk) || '[]'); } catch (e) { }
-    (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending').forEach(r => {
+    (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending' && userById(r.from)).forEach(r => {
       if (seen.indexOf(r.id) > -1) return;
       seen.push(r.id);
       const u = userById(r.from) || { name: '故人' };
@@ -3031,7 +3037,7 @@ function refreshUnreadUI() {
   if (!state.me) return;
   maybeNotifyNative();
   const n = unreadTotal();
-  const pend = (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending').length;
+  const pend = (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending' && userById(r.from)).length;
   const badgeN = n > 0 ? n : pend;
   const tab = $('.tab-item[data-tab="friends"]');
   if (tab) {
