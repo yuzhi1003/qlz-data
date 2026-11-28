@@ -2452,7 +2452,8 @@ function renderDrawer() {
   <div class="set-group">
     <h4>云端</h4>
     <div class="set-line"><div class="lbl">云同步</div><div class="val">${(typeof cloudOn === 'function' && cloudOn()) ? (CLOUD.p === 'gh' ? 'GitHub · ' + CLOUD.owner + '/' + CLOUD.repo : '已配置') : '未配置（本机）'}</div><button class="act" onclick="cloudConfig()">配置</button></div>
-    <p class="hint" style="margin-top:8px">全部成员填同一套云端后，动态与聊天即时互通。</p>
+    <div class="set-line"><div class="lbl">页面缓存</div><div class="val">${localStorage.getItem('qlz_cache_t') ? '上次清理 ' + localStorage.getItem('qlz_cache_t') : '更新后仍是旧页时可清'}</div><button class="act" onclick="clearCache()">清理</button></div>
+    <p class="hint" style="margin-top:8px">只清页面缓存，不动账号、动态与本机记录；清完自动重载最新网页。</p>
   </div>
   <div class="set-group">
     <h4>帮会</h4>
@@ -2533,6 +2534,18 @@ function setChatBg() {
 }
 function setChatMusic() {
   pickAudio((d, n) => { me().chatMusic = d; saveState(); renderAll(); toast('已设聊天音乐：' + n); });
+}
+function clearCache(){
+  const t = new Date();
+  localStorage.setItem('qlz_cache_t', (t.getMonth()+1) + '-' + t.getDate() + ' ' + String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0'));
+  toast('正在清缓存并重载…');
+  setTimeout(() => {
+    try {
+      const u = new URL(location.href);
+      u.searchParams.set('fresh', Date.now().toString(36));
+      location.replace(u.toString());
+    } catch (e) { location.reload(); }
+  }, 350);
 }
 function toggleEnter(){
   const now = localStorage.getItem('qlz_enter') === 'nl' ? 'send' : 'nl';
