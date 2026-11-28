@@ -1085,8 +1085,18 @@ async function ghPoll(force) {
     });
     if (hasPatch(pending)) applyPatchTo(state, pending);
   } catch (e) { }
-  const u = findMine(state.users);
-  if (u) setUid(u.id); else { state.me = null; }
+  let u = findMine(state.users);
+  if (u) setUid(u.id);
+  else if (!state.me && getUid()) state.me = getUid();   // 认不出也别把身份抹成空号
+  if (!u && state.me) {
+    // 云端暂时没有本机账号：把本机档案重新登记回去，免得一直当「无号之人」
+    const local = (localSnap.users || []).find(x => x.id === state.me);
+    if (local) {
+      local.restored = true;
+      if (!state.users.some(x => x.id === local.id)) state.users.push(local);
+      u = local;
+    }
+  }
   try {
     if (u) {
       const pendKey = 'qlz_pend_' + u.id;
@@ -2992,6 +3002,8 @@ function renderChat() {
 }
 function sendChatMsg(kind, text) {
   if (!chatCtx) return;
+  if (!state.me) { toast('尚未登录，请退出重进一次再发'); return; }
+  if (!state.me) return toast('账号还没认上，先回个人设置点一次「立即同步」再发');
   if (kind !== 'img') {
     const err = checkText(text, { max: 90, links: true, words: true });
     if (err) return toast(err);
@@ -3247,6 +3259,26 @@ function normalizeExtras(doc){
     doc.groups = (doc.groups||[]).filter(g=>g.isMain);
     Object.keys(doc.groupMsgs||{}).forEach(k=>{ if(!keep.includes(k)) delete doc.groupMsgs[k]; });
   }
+  // 未登记的发送者：消息自带昵称的，就地补成账号，不再显示「故人」
+  (function healSenders() {
+    const known = new Set((doc.users || []).map(u => u.id));
+    const names = {};
+    const scan = (arr) => (arr || []).forEach(m => {
+      if (!m || !m.from || known.has(m.from)) return;
+      if (m.nm && String(m.nm).trim()) names[m.from] = String(m.nm).trim();
+    });
+    Object.keys(doc.groupMsgs || {}).forEach(k => scan(doc.groupMsgs[k]));
+    Object.keys(doc.dm || {}).forEach(k => scan(doc.dm[k]));
+    Object.keys(names).forEach(id => {
+      doc.users.push({
+        id, name: names[id], sig: '春风不止，清平不散。', avatar: '',
+        bg: null, music: null, splash: null, chatBg: null, chatMusic: null,
+        role: 'member', friends: [], createdAt: Date.now(), visitsTotal: 0,
+        wxId: 'wx_' + id, wxName: names[id], restored: true, note: '按发言昵称补建'
+      });
+    });
+  })();
+
   // 好友关系自愈：已同意的申请补齐双向好友；单边好友补成双向
   const umap = new Map((doc.users || []).map(u => [u.id, u]));
   (doc.reqs || []).forEach(r => {
