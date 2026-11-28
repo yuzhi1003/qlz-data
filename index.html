@@ -410,7 +410,7 @@ audio{width:100%;margin-top:6px}
     <button class="btn btn-wechat" id="btnWechat">微信一键登录</button>
     <div class="auth-note" id="authNote">
       本设备仅可注册一个账号，一经注册不可再开小号，桀桀桀。<br>
-      仅季云知成为本帮会「开发者」。
+      帮会只认一位开发者，首位注册者得之。
     </div>
   </div>
 </div>
@@ -1495,7 +1495,7 @@ function clearCloud() {
 }
 
 
-/* ---------- 角色整顿：只留季云知一位开发者 ---------- */
+/* 开发者只留一位 */
 function normalizeRoles() {
   if (!state.users || !state.users.length) return;
   if (state.rolesV >= 2) return;
@@ -1712,7 +1712,7 @@ function showAuth() {
   const reg = state.registered;
   $('#authNote').innerHTML = reg
     ? `本设备已注册账号「${esc((me() || state.users.find(u => u.id === state.regUid) || {}).name || '')}」。<br>请用微信登录继续，本帮会不发小号。`
-    : `本设备仅可注册一个账号，一经注册不可再开小号。<br>季云知，成为本帮会「开发者」。`;
+    : `本设备仅可注册一个账号，一经注册不可再开小号。<br>帮会只认一位开发者，首位注册者得之。`;
   $('#btnWechat').textContent = reg ? '微信登录' : '微信一键注册登录';
   auth.classList.remove('hidden');
 }
@@ -1827,7 +1827,7 @@ async function register(name, avatar) {
     role: 'member', friends: [], createdAt: Date.now(), visitsTotal: 0,
     wxId: 'wx_' + id, wxName: name
   };
-  // 只有「季云知」是开发者，其他人一律为成员
+  // 开发者只她一位，其余都是成员
   if (name.trim() === '季云知') u.role = 'developer';
   if (typeof getDevice === 'function') u.deviceId = getDevice();
   state.users.push(u);
