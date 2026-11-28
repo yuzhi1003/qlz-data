@@ -1042,7 +1042,13 @@ async function ghFetch(url, opts) {
   const n = Math.max(1, (CLOUD.tokens || []).length);
   let last = null;
   for (let i = 0; i < n; i++) {
-    const r = await fetch(url, opts());
+    let r;
+    try {
+      r = await fetch(url, opts());
+    } catch (err) {
+      // fetch 抛 TypeError 就是压根没连上，不是对方回了个错
+      throw new Error('网络连不上 GitHub，正在自动重试');
+    }
     if (r.status === 401 || r.status === 403 || r.status === 429) {
       last = r;
       DB.slowUntil = Date.now() + 120000;   // 两分钟内降到 12 秒一查
@@ -1081,6 +1087,15 @@ async function ghRead(cond) {
   }
   if (!doc) throw new Error('云端读取为空（文件 ' + (j.size || '?') + ' 字节，状态 ' + r.status + '）');
   return { sha: j.sha, doc };
+}
+// 接口连不上时，从 jsDelivr 的仓库镜像读一份（只读，可能有几分钟延迟）
+async function cdnRead() {
+  const u = 'https://fastly.jsdelivr.net/gh/' + CLOUD.owner + '/' + CLOUD.repo + '@' + CLOUD.branch + '/' + CLOUD.path;
+  const r = await fetch(u + (u.indexOf('?') > -1 ? '&' : '?') + 't=' + Math.floor(Date.now() / 300000), { cache: 'no-store' });
+  if (!r.ok) throw new Error('镜像也没读到');
+  const doc = await r.json();
+  if (!doc || !doc.users || !doc.users.length) throw new Error('镜像内容为空');
+  return doc;
 }
 async function ghPut(path, contentB64, sha, msg) {
   const body = { message: msg || ('qlz ' + Date.now().toString(36)), content: contentB64, branch: CLOUD.branch };
@@ -1142,7 +1157,11 @@ async function ghUpload(dataUrl, kind, filename) {
 async function ghPoll(force) {
   try { await flushPatch(); } catch (e) { }
   let cur;
-  try { cur = await ghRead(true); } catch (e) { return; }
+  try { cur = await ghRead(true); } catch (e) {
+    DB.err = '同步暂时连不上，正在重试';
+    return;
+  }
+  if (DB.err.indexOf('连不上') > -1 || DB.err.indexOf('镜像') > -1) DB.err = '';   // 连回来了就把话收掉
   if (!cur.sha) return;
   if (cur.notModified && !force) return;
   if (cur.sha === DB.sha && !force) return;
@@ -1245,8 +1264,18 @@ async function ghInit() {
     setTimeout(() => pollOnce(true), 1500);
   } catch (e) {
     console.warn('[云同步] 初始化失败', e);
-    DB.ready = false;
-    DB.err = (e && e.message) || '网络';
+    DB.err = (e && e.message) || '网络异常';
+    try {
+      const doc = normalizeDoc(await cdnRead());
+      state = normalizeDoc(Object.assign(doc, localAuth()));
+      const u = findMine(state.users);
+      if (u) setUid(u.id);
+      DB.last = snapshot();
+      DB.ready = true;
+      DB.cdn = Date.now();
+      DB.err = '接口连不上，现在看的是镜像副本，稍后自动校正';
+      persistLocal(); renderAll();
+    } catch (e2) { DB.ready = false; }
     setTimeout(() => { toast('云端未连上（' + DB.err + '），稍后自动重试'); }, 1800);
     if (cloudOn() && !DB.retry) {
       DB.retry = setInterval(async () => {
