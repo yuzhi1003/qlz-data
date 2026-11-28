@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>清平乐 · 云服务器与多帮会方案</title>
+<style>
+:root{--ink:#22302b;--jade:#2f5d50;--cinnabar:#a8473c;--paper:#f7f1e3;--sub:#6f6457}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"Songti SC",SimSun,serif;line-height:1.85;font-size:16px}
+.wrap{max-width:820px;margin:0 auto;padding:28px 22px 60px}
+h1{font-size:23px;letter-spacing:2px;margin:6px 0 4px;font-weight:600}
+.sub{color:var(--sub);font-size:13px;letter-spacing:1px;margin-bottom:24px}
+h2{font-size:17px;margin:30px 0 10px;padding-left:10px;border-left:3px solid var(--jade)}
+h3{font-size:15px;margin:18px 0 6px;color:var(--jade)}
+p{margin:8px 0}
+ul{margin:8px 0 8px 20px;padding:0}
+li{margin:4px 0}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14.5px;background:rgba(255,255,255,.55)}
+th,td{border:1px solid rgba(120,100,70,.28);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:rgba(47,93,80,.08);font-weight:600}
+.note{background:rgba(168,71,60,.06);border-left:3px solid var(--cinnabar);padding:10px 12px;margin:12px 0;font-size:14.5px}
+.card{background:rgba(255,255,255,.62);border:1px solid rgba(120,100,70,.2);border-radius:6px;padding:14px 16px;margin:12px 0}
+.small{color:var(--sub);font-size:13px}
+</style></head>
+<body><div class="wrap">
+<h1>清平乐 · 云服务器与多帮会方案</h1>
+<div class="sub">拟稿：公语知 · 2026 年 11 月 28 日 · 供购置前审阅</div>
+
+<div class="card">
+<p><b>一句话结论：</b>先买一台 2核4G（或 2核2G）把一两个帮会跑通，媒体图片走对象存储；验证成功后再升 4核8G。做多帮会要重写服务端与数据分区，不是换台机器就能成。</p>
+</div>
+
+<h2>一、目标与分期</h2>
+<table>
+<tr><th>阶段</th><th>规模</th><th>配置</th><th>月租概算</th></tr>
+<tr><td>第一期<br>验证</td><td>1～5 个帮会<br>同时在线 200 人以内</td><td>2核2G / 2核4G，系统盘 40～80G，5M 带宽</td><td>约百元上下</td></tr>
+<tr><td>第二期<br>铺开</td><td>十几到几十个帮会<br>同时在线 1500～2000 人</td><td>4核8G，媒体走 OSS/COS + CDN</td><td>约 150～250（轻量）</td></tr>
+<tr><td>第三期<br>上千日活</td><td>上千人日活、图片频繁</td><td>4核8G 起，加 Redis、加节点、CDN 承担图片</td><td>按量增长</td></tr>
+</table>
+<p class="small">价格为常见档位，购置当日以官网实价为准；我可以先帮你核价再下单。</p>
+
+<h2>二、多帮会怎么隔离</h2>
+<ul>
+<li><b>一帮会一空间</b>：以帮会码进入，服务端按「帮会编号 + 房间」广播，A 帮会的消息不会投到 B 帮会。</li>
+<li><b>数据分区</b>：成员、消息、公告、诗库、权限全部带帮会编号，一张表分区存，查谁只查谁。</li>
+<li><b>限流按帮会算</b>：每个帮会各自限频，避免一个大群把整台机器拖住。</li>
+<li><b>身份与权限</b>：登录发凭证（令牌），大当家、开发者身份按帮会各自生效，互不相干。</li>
+</ul>
+
+<h2>三、数据与媒体</h2>
+<ul>
+<li><b>文字与账号</b>：存服务器上的 PostgreSQL，一条消息约一百多字节，40G 盘可放上亿条。</li>
+<li><b>图片、语音、录屏</b>：一律放对象存储（阿里云 OSS / 腾讯云 COS），配 CDN 加速，服务器只存链接。</li>
+<li><b>不建议用免费图床</b>：会挂、会防盗链、会删图，旧照片变裂图，迁移时更痛。</li>
+<li><b>此前 Supabase 的表结构</b>可复用为参考，但那条通道国内不通，不再走。</li>
+</ul>
+
+<h2>四、实时消息</h2>
+<ul>
+<li>用 WebSocket 长连接，替代现在的 GitHub 定时轮询；发出即达，延迟从「几分钟」降到「一秒内」。</li>
+<li>断线自动重连、离线消息补拉；消息落库后再投递，保证不丢。</li>
+<li>网页在 HTTPS 上，只能用加密的 wss，所以必须配域名与证书（Let's Encrypt 免费，我来签）。</li>
+</ul>
+
+<h2>五、购置前必查五项</h2>
+<table>
+<tr><th>检查项</th><th>要点</th></tr>
+<tr><td>1. 谁做实名主体</td><td>云账号、域名实名、备案主体须同一人。由已成年的姐姐注册、家长同意，可以走通；未成年人不便做主体。</td></tr>
+<tr><td>2. 备案</td><td>大陆机房必须备案（域名指向大陆服务器开 80/443）。个人备案只宜非经营性；站点文案按「工具 / 资讯」写，别写「社区论坛」，部分省份会要求额外资质。</td></tr>
+<tr><td>3. 机房</td><td>怕备案麻烦选香港轻量，免备案；代价是延迟略高、月租贵两三成。</td></tr>
+<tr><td>4. 带宽</td><td>5M 是底线；图片全靠对象存储承担，服务器带宽只跑文字与小消息。</td></tr>
+<tr><td>5. 配置</td><td>先 2核2G／2核4G 起步，不必一步上 4核8G；能按月付就别一次买年付长周期。</td></tr>
+</table>
+
+<div class="note">
+<b>最容易卡住的一步是备案</b>，不是钱。先和姐姐、家长确认「用谁的身份备案、域名在哪买」，这步定了，其余我来做。
+</div>
+
+<h2>六、我这边能做什么，你只需做什么</h2>
+<table>
+<tr><th>我来做</th><th>你（或家人）来做</th></tr>
+<tr><td>SSH 登录服务器，装 Node、PostgreSQL、Redis；写服务端与 WebSocket 协议</td><td>选配置、下单、实名</td></tr>
+<tr><td>签证书、配端口与安全组、部署上线、盯日志与备份</td><td>把 IP 与临时密码给我；域名解析指过去</td></tr>
+<tr><td>改清平乐数据层为服务端读写（前端界面不动）</td><td>用手机打开验收，看聊天是否即时</td></tr>
+<tr><td>压测与容量评估，给出升配时机</td><td>——</td></tr>
+</table>
+
+<h2>七、必须说清的风险</h2>
+<ul>
+<li>多帮会版是<b>重构服务端与存储结构</b>，工作量按数个通宵到一两周计，不是改几行配置。</li>
+<li>4G 内存不能靠「删数据」变无限；不够只能升配。硬盘才是存消息的地方，系统盘 40G 已含在月租里。</li>
+<li>带宽是最先撞墙的一项；图片不外置，买多大机器都会卡。</li>
+<li>社交类内容若规模做大，可能涉及额外合规要求，届时需另行评估。</li>
+</ul>
+
+<p class="small" style="margin-top:28px;text-align:center">— 此稿待你审阅，未购置前不必改动任何东西 —</p>
+</div></body></html>
