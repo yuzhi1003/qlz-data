@@ -132,11 +132,16 @@ public class MainActivity extends Activity {
     @Override
     public boolean onKeyDown(int code, KeyEvent e) {
         if (code == KeyEvent.KEYCODE_BACK && web != null) {
-            final boolean[] handled = {false};
-            web.evaluateJavascript("(function(){try{return (typeof window.qlzBack==='function' && window.qlzBack())?'1':'0';}catch(e){return '0';}})()",
-                value -> {
-                    if (value != null && value.indexOf('1') > -1) { handled[0] = true; return; }
-                    runOnUiThread(() -> { if (web.canGoBack()) web.goBack(); else finish(); });
+            web.evaluateJavascript(
+                "(function(){try{return (typeof window.qlzBack==='function' && window.qlzBack())?'1':'0';}catch(err){return '0';}})()",
+                new ValueCallback<String>() {
+                    @Override
+                    public void onReceiveValue(String value) {
+                        boolean handled = value != null && value.indexOf('1') > -1;
+                        if (handled) return;
+                        if (web.canGoBack()) web.goBack();
+                        else finish();
+                    }
                 });
             return true;
         }
