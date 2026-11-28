@@ -7,10 +7,13 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.ContentValues;
+import android.content.pm.PackageManager;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.KeyEvent;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -29,7 +32,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-// build-tag: v1.7-notify-20261128
+// build-tag: v2.0-20261128
 public class MainActivity extends Activity {
 
     private static final String LIVE = "https://yuzhi1003.github.io/qlz-data/index.html";
@@ -39,6 +42,8 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> filePathCallback;
     private static final int REQ_FILE = 1001;
     private boolean fellBack = false;
+    private boolean loadedOk = false;
+    private final Handler main = new Handler(Looper.getMainLooper());
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -78,6 +83,21 @@ public class MainActivity extends Activity {
                     fellBack = true;
                     v.loadUrl(LOCAL);
                 }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView v, WebResourceRequest r, WebResourceResponse resp) {
+                try {
+                    if (r.isForMainFrame() && resp != null && resp.getStatusCode() >= 400 && !fellBack) {
+                        fellBack = true;
+                        v.loadUrl(LOCAL);
+                    }
+                } catch (Exception e) { }
+            }
+
+            @Override
+            public void onPageFinished(WebView v, String url) {
+                if (url != null && url.indexOf("qlz.local") < 0) loadedOk = true;
             }
 
             @Override
@@ -130,10 +150,13 @@ public class MainActivity extends Activity {
 
         web.addJavascriptInterface(new Bridge(), "QLZNative");
         ensureChannel();
-        if (Build.VERSION.SDK_INT >= 33) {
-            try { requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 2002); } catch (Exception e) { }
-        }
         web.loadUrl(LIVE + "?v=" + (System.currentTimeMillis()/60000));   // 加时间戳，绕过缓存，永远拿最新网页
+        // 网络慢到一直不出页面，也别一直白屏
+        main.postDelayed(new Runnable() {
+            @Override public void run() {
+                if (!loadedOk && !fellBack && web != null) { fellBack = true; web.loadUrl(LOCAL); }
+            }
+        }, 15000);
     }
 
     @Override
@@ -207,7 +230,17 @@ public class MainActivity extends Activity {
         }
     }
 
+    private boolean askNotifyOnce() {
+        if (Build.VERSION.SDK_INT < 33) return true;
+        try {
+            if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED) return true;
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 2002);
+        } catch (Exception e) { }
+        return false;
+    }
+
     private void pushNotify(final String title, final String body, final int count) {
+        if (!askNotifyOnce()) return;
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
