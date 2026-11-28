@@ -222,7 +222,7 @@ public class MainActivity extends Activity {
                     Notification.Builder b = Build.VERSION.SDK_INT >= 26
                             ? new Notification.Builder(MainActivity.this, "qlz_msg")
                             : new Notification.Builder(MainActivity.this);
-                    b.setSmallIcon(R.mipmap.ic_launcher)
+                    b.setSmallIcon(android.R.drawable.ic_dialog_info)
                             .setContentTitle(title == null ? "清平乐" : title)
                             .setContentText(body == null ? "有新消息" : body)
                             .setAutoCancel(true)
