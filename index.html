@@ -2512,6 +2512,7 @@ function renderDrawer() {
     <div class="set-line"><div class="lbl">云同步</div><div class="val">${(typeof cloudOn === 'function' && cloudOn()) ? (CLOUD.p === 'gh' ? 'GitHub · ' + CLOUD.owner + '/' + CLOUD.repo : '已配置') : '未配置（本机）'}</div><button class="act" onclick="cloudConfig()">配置</button></div>
     <div class="set-line"><div class="lbl">同步状态</div><div class="val">${DB.ready ? '已连云端' : (cloudOn() ? '待重连' + (DB.err ? '（' + esc(String(DB.err).slice(0, 18)) + '）' : '') : '本机模式')} · 在册 ${(state.users || []).length} 人</div><button class="act" onclick="forceSync()">立即同步</button></div>
     <div class="set-line"><div class="lbl">密钥</div><div class="val">${CLOUD.token ? '已存 · 末四位 ' + esc(String(CLOUD.token).slice(-4)) + ' · ' + CLOUD.token.length + ' 位' : '未填写'}</div><button class="act" onclick="cloudConfig()">重填</button></div>
+    <div class="set-line"><div class="lbl">数据备份</div><div class="val">导出整份数据为 JSON</div><button class="act" onclick="exportBackup()">导出</button></div>
     <div class="set-line"><div class="lbl">页面缓存</div><div class="val">${localStorage.getItem('qlz_cache_t') ? '上次清理 ' + localStorage.getItem('qlz_cache_t') : '更新后仍是旧页时可清'}</div><button class="act" onclick="clearCache()">清理</button></div>
     <p class="hint" style="margin-top:8px">只清页面缓存，不动账号、动态与本机记录；清完自动重载最新网页。</p>
   </div>
@@ -2794,8 +2795,57 @@ function unreadChat() {
   ((me() && me().friends) || []).forEach(fid => { if (userById(fid)) n += unreadOf('dm', fid); });
   return n;
 }
+function exportBackup() {
+  try {
+    const doc = snapshot();
+    doc.me = state.me;
+    doc.exportedAt = new Date().toISOString();
+    doc.wipeV = state.wipeV || 0;
+    const text = JSON.stringify(doc);
+    const d = new Date();
+    const name = '清平乐备份-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2)
+      + '-' + ('0' + d.getHours()).slice(-2) + ('0' + d.getMinutes()).slice(-2) + '.json';
+    if (window.QLZNative && QLZNative.saveBackup) {
+      QLZNative.saveBackup(name, text);
+      toast('备份已交给手机保存');
+      return;
+    }
+    const blob = new Blob([text], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+    toast('备份文件已生成：' + name);
+  } catch (e) { toast('导出失败：' + (e.message || '未知')); }
+}
+
+let lastNotifyN = 0;
+function maybeNotifyNative() {
+  try {
+    if (!window.QLZNative || !QLZNative.notifyMsg) return;
+    if (document.visibilityState === 'visible') { lastNotifyN = 0; return; }
+    const n = unreadChat();
+    if (!n || n <= lastNotifyN) { if (!n) lastNotifyN = 0; return; }
+    let who = '', text = '';
+    const g = state.groups.find(x => x.isMain) || state.groups[0];
+    if (g) {
+      const ms = (state.groupMsgs || {})[g.id] || [];
+      const last = ms.filter(m => m.from && m.from !== state.me && !m.type).slice(-1)[0];
+      if (last) {
+        const u = userById(last.from) || { name: '故人' };
+        who = u.name; text = last.kind === 'img' ? '[图片]' : String(last.text || '').slice(0, 40);
+      }
+    }
+    QLZNative.notifyMsg('清平乐 · 醉清欢',
+      (who ? who + '：' : '') + (text || '有 ' + n + ' 条新消息'), n);
+    lastNotifyN = n;
+  } catch (e) { }
+}
+
 function refreshUnreadUI() {
   if (!state.me) return;
+  maybeNotifyNative();
   const n = unreadTotal();
   const tab = $('.tab-item[data-tab="friends"]');
   if (tab) {
