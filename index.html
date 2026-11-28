@@ -622,8 +622,16 @@ function persistLocal() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); }
   catch (e) { toast('正常发，没事，咱这个内存有点小，本知正在尽量优化，若惹得大家不开心的话，咱们欺负全服去，乖'); }
 }
+/* 健康快照：云端被旧版外壳冲空时，用这份本机备份自动补回 */
+function saveSafeCopy(){
+  try{
+    if((state.users||[]).length>=5 && (state.groups||[]).length)
+      localStorage.setItem('qlz_safe', JSON.stringify({d:snapshot(),t:Date.now()}));
+  }catch(e){}
+}
 function saveState() {
   persistLocal();
+  saveSafeCopy();
   if (typeof queueSync === 'function') queueSync();
 }
 
@@ -1079,7 +1087,15 @@ async function ghPoll(force) {
   const base = normalizeDoc(Object.assign(cur.doc, auth));
   DB.last = JSON.parse(JSON.stringify(base));
   state = base;
-  if (state.wipeV !== WIPE_V) purgeUsers(state);
+  try{
+    const safe=JSON.parse(localStorage.getItem('qlz_safe')||'null');
+    if(safe && safe.d && (safe.d.users||[]).length > (state.users||[]).length){
+      SYNC_ARR.forEach(k=>{ if(Array.isArray(safe.d[k])) state[k]=mergeArr(state[k]||[], {u:safe.d[k]}, k); });
+      SYNC_MSG.forEach(k=>{ const dd=safe.d[k]||{}; Object.keys(dd).forEach(c=>{ state[k]=state[k]||{}; state[k][c]=mergeArr(state[k][c]||[], {u:dd[c]}, k); }); });
+      DB.err='云端数据被冲空，正用本机备份补回';
+      try{ queueSync(); }catch(e){}
+    }
+  }catch(e){ }
 
   // 把本机还没推上去的改动叠回来，只叠「新增与更新」，绝不叠删除，
   // 免得本机旧快照把别台设备新写的人与消息一并抹掉
