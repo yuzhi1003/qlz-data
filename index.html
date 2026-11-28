@@ -1103,7 +1103,18 @@ async function ghRead(cond) {
   try { DB.etag = r.headers.get('ETag') || DB.etag; } catch (e) { }
   const j = await r.json();
   let doc = null;
-  try { doc = JSON.parse(b64dec(j.content)); } catch (e) { doc = null; }
+  // GitHub 的 Contents API 对超过 1 MB 的文件不再内联返回 content（encoding 为 none），
+  // 只给 download_url。以前就是这里被判成「云端读取为空」，于是整台设备拒写、同步停摆。
+  if (j.content) {
+    try { doc = JSON.parse(b64dec(j.content)); } catch (e) { doc = null; }
+  }
+  if (!doc && j.download_url) {
+    try {
+      const raw = await fetch(j.download_url + (j.download_url.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store', headers: { 'Accept': 'application/vnd.github.raw' } });
+      if (raw.ok) doc = JSON.parse(await raw.text());
+    } catch (e) { doc = null; }
+  }
+  if (!doc) throw new Error('云端读取为空（文件 ' + (j.size || '?') + ' 字节，状态 ' + r.status + '）');
   return { sha: j.sha, doc };
 }
 async function ghPut(path, contentB64, sha, msg) {
