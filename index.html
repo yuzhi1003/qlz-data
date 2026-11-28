@@ -896,7 +896,7 @@ function diffDoc(prev, next) {
     });
   });
   const sc = {};
-  if (prev.rules !== next.rules) sc.rules = next.rules;
+  if (prev.rules !== next.rules && DB.rulesDirty) sc.rules = next.rules;   // 准则只由管理员主动保存时才推送，避免旧设备把它盖回去
   if (prev.rolesV !== next.rolesV) sc.rolesV = next.rolesV;
   if ((prev.wipeV || 0) !== (next.wipeV || 0)) sc.wipeV = next.wipeV || 0;
   if (Object.keys(sc).length) p.s = sc;
@@ -1052,7 +1052,7 @@ async function ghFlush(p) {
     normalizeDoc(doc);
     applyPatchTo(doc, p);
     const w = await ghPut(CLOUD.path, b64enc(JSON.stringify(doc)), cur.sha, '同步 ' + new Date().toLocaleTimeString());
-    if (w.ok) { DB.sha = w.sha; DB.last = snapshot(); DB.lastEvent = Date.now(); return; }
+    if (w.ok) { DB.sha = w.sha; DB.last = snapshot(); DB.lastEvent = Date.now(); DB.rulesDirty = false; return; }
     if (w.status === 409 || w.status === 422) continue;
     throw new Error('GH put ' + w.status + ' ' + ((w.json && w.json.message) || ''));
   }
@@ -1876,7 +1876,7 @@ function renderRules(can) {
 function saveRules() {
   if (!isAdmin(me())) return toast('仅管理员可修改准则');
   state.rules = $('#rulesTa').value;
-  saveState(); toast('清平准则已更新');
+  DB.rulesDirty = true; saveState(); toast('清平准则已更新');
 }
 
 function orderItems(arr) {
