@@ -2464,7 +2464,6 @@ function addFriends(a, b) {
 function renderFriends() {
   const m = me();
   const incoming = state.reqs.filter(r => r.to === m.id && r.status === 'pending' && userById(r.from));
-  const outgoing = state.reqs.filter(r => r.from === m.id && r.status === 'accepted').slice(0, 6);
   const sentPending = state.reqs.filter(r => r.from === m.id && r.status === 'pending' && userById(r.to));
   const friends = m.friends.map(id => userById(id)).filter(Boolean);
   const others = state.users.filter(u => u.id !== m.id);
