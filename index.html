@@ -717,32 +717,8 @@ function baseState() {
 
 /* ---------- 清旧号（v6）：清空历史注册数据，从根上断掉「故人」重影 ---------- */
 const WIPE_V = 6;
-function purgeUsers(doc) {
-  const dev = doc.users.find(u => u.name === '季云知') || doc.users.find(u => u.role === 'developer');
-  const keep = [], seen = new Set();
-  doc.users.forEach(u => {
-    const key = 'n:' + u.name;
-    if (dev && u.id === dev.id) { if (!seen.has(key)) { keep.push(u); seen.add(key); } return; }
-    if (!u.seedKey && !u.restored) return;   // 历史注册号一律清掉，新版重新注册
-    if (seen.has(key)) return;
-    keep.push(u); seen.add(key);
-  });
-  const gone = doc.users.filter(u => !keep.some(k => k.id === u.id)).map(u => u.id);
-  doc.users = keep;
-  if (gone.length) {
-    const gs = new Set(gone);
-    doc.posts = (doc.posts || []).filter(p => !gs.has(p.uid));
-    doc.reqs = (doc.reqs || []).filter(r => !gs.has(r.from) && !gs.has(r.to));
-    doc.dm = {};
-    (doc.groups || []).forEach(g => { g.members = (g.members || []).filter(id => !gs.has(id)); });
-    Object.keys(doc.groupMsgs || {}).forEach(k => {
-      doc.groupMsgs[k] = (doc.groupMsgs[k] || []).filter(m => !(m.from && gs.has(m.from)));
-    });
-    if (doc.me && gs.has(doc.me)) doc.me = null;
-  }
-  doc.wipeV = WIPE_V;
-  return doc;
-}
+/* v6 强制清号已停用：它会误删真实注册用户并清空私聊，历史包袱到此为止。 */
+function purgeUsers(doc) { return doc; }
 
 function boot() {
   // 本机一次性清号：保留云端配置与设备号，清掉旧的登录态与旧库
@@ -757,7 +733,7 @@ function boot() {
   state = loadState();
   if (!state) { state = baseState(); saveState(); }
   if (!state.users) state = baseState();
-  if (state.wipeV !== WIPE_V) { purgeUsers(state); saveState(); }
+  // 清号逻辑已停用
 
   // 兼容旧数据：更新清平准则；移除本人置顶的「开帮」欢迎公告
   const OLD_RULE_HEAD = '一、芝兰同室，君子同芳';
