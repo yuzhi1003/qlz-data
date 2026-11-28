@@ -893,6 +893,7 @@ function normalizeDoc(doc) {
   // 墓碑生效：被合并/注销的账号 id 记在 delIds，任何读路径都不许让它们复活
   if (Array.isArray(doc.delIds) && doc.delIds.length) {
     doc.users = (doc.users || []).filter(u => doc.delIds.indexOf(u.id) < 0);
+    (doc.groups || []).forEach(g => { if (Array.isArray(g.members)) g.members = g.members.filter(id => doc.delIds.indexOf(id) < 0); });
   }
   return doc;
 }
@@ -1039,6 +1040,14 @@ function applyPatchTo(doc, p) {
   if (Array.isArray(doc.delIds) && doc.delIds.length) {
     doc.users = (doc.users || []).filter(u => doc.delIds.indexOf(u.id) < 0);
   }
+  // 群成员只认在册的人：被删账号的 id 不许继续挂在名单里，否则人数会虚高
+  const __live = new Set((doc.users || []).map(u => u.id));
+  (doc.groups || []).forEach(g => {
+    if (Array.isArray(g.members)) {
+      const ms = g.members.filter(m => __live.has(m));
+      if (ms.length !== g.members.length) g.members = ms;
+    }
+  });
   return doc;
 }
 
