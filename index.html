@@ -1275,6 +1275,8 @@ async function ghPoll(force) {
   if (state.me && me()) { softRender(); if (typeof chatCtx !== 'undefined' && chatCtx) renderChat(); }
 }
 async function ghInit() {
+  // 还没输口令时没有密钥，别硬连：否则主屏会先蹦一句「云端未连上（GH 401）」，吓人
+  if (!keyPoolReady) { DB.ready = false; DB.err = ''; return; }
   try {
     const cur = await ghRead();
     const doc = cur.doc;
