@@ -662,7 +662,9 @@ function baseState() {
     rules: DEFAULT_RULES,
     signups: [], polls: [], stats: [], notices: [],
     groups: [], groupMsgs: {}, dm: {}, reqs: [], flyflowers: [], updates: [], gnameReqs: [], tombs: [], rolesV: 0,
-    visits, likes, seq: 0
+    visits, likes, seq: 0,
+    // 删过的号写死在这儿，新设备、离线、读镜像时都不会把它们放回来
+    delIds: ['u_me_mx07o6h6', 'u_me_mwyx5co4', 'u_me_mwzzbz9s']
   };
 }
 
