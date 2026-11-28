@@ -32,7 +32,7 @@ import java.io.OutputStream;
 // build-tag: v1.7-notify-20261128
 public class MainActivity extends Activity {
 
-    private static final String LIVE = "https://yuzhi1003.github.io/qlz-data/";
+    private static final String LIVE = "https://yuzhi1003.github.io/qlz-data/index.html";
     private static final String LOCAL = "https://qlz.local/index.html";
 
     private WebView web;
@@ -133,7 +133,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 33) {
             try { requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 2002); } catch (Exception e) { }
         }
-        web.loadUrl(LIVE);
+        web.loadUrl(LIVE + "?v=" + (System.currentTimeMillis()/60000));   // 加时间戳，绕过缓存，永远拿最新网页
     }
 
     @Override
