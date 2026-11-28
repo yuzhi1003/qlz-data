@@ -609,10 +609,7 @@ const POEMS = [
 ];
 
 /* ---------- 默认帮规 ---------- */
-const DEFAULT_RULES = `1. 11月27日之前，听二当家的；11月28日起，清平乐一应事务，交由清平乐即任大当家定夺。
-2. 团结友爱，互助和谐。
-3. 任何成员不得以辱骂、诈骗等为手段损害帮会利益，违者即刻踢除，终身不得入清平。
-4. 向阳而生，快乐成长。`;
+const DEFAULT_RULES = `既心中自有清风，那又何须一场无人问津的星雨？`;
 
 /* ---------- 状态 ---------- */
 let state;
@@ -764,7 +761,7 @@ function boot() {
 
   // 兼容旧数据：更新清平准则；移除本人置顶的「开帮」欢迎公告
   const OLD_RULE_HEAD = '一、芝兰同室，君子同芳';
-  if (!state.rules || String(state.rules).indexOf(OLD_RULE_HEAD) === 0) {
+  if (!state.rules || String(state.rules).indexOf(OLD_RULE_HEAD) === 0 || /^1\.\s*11月27日之前/.test(String(state.rules).trim())) {
     state.rules = DEFAULT_RULES;
   }
   state.notices.forEach(n => {
@@ -837,7 +834,7 @@ function findMine(users) {
 function normalizeDoc(doc) {
   ['users', 'posts', 'signups', 'polls', 'stats', 'notices', 'groups', 'reqs', 'flyflowers', 'updates', 'gnameReqs'].forEach(k => { if (!Array.isArray(doc[k])) doc[k] = []; });
   ['groupMsgs', 'dm', 'visits', 'likes'].forEach(k => { if (!doc[k] || typeof doc[k] !== 'object') doc[k] = {}; });
-  if (!doc.rules) doc.rules = (typeof DEFAULT_RULES !== 'undefined' ? DEFAULT_RULES : '');
+  if (!doc.rules || /^1\.\s*11月27日之前/.test(String(doc.rules).trim())) doc.rules = (typeof DEFAULT_RULES !== 'undefined' ? DEFAULT_RULES : '');
   if (doc.rolesV == null) doc.rolesV = 0;
   if (doc.wipeV == null) doc.wipeV = 0;
   if (typeof normalizeExtras === 'function') doc = normalizeExtras(doc);
