@@ -1266,7 +1266,10 @@ async function ghInit() {
     console.warn('[云同步] 初始化失败', e);
     DB.err = (e && e.message) || '网络异常';
     try {
-      const doc = normalizeDoc(await cdnRead());
+      const doc = await cdnRead();
+      // 镜像可能是几小时前的，墓碑只认并集，别把删过的号放回来
+      doc.delIds = Array.from(new Set([].concat(doc.delIds || [], (state && state.delIds) || [])));
+      normalizeDoc(doc);
       state = normalizeDoc(Object.assign(doc, localAuth()));
       const u = findMine(state.users);
       if (u) setUid(u.id);
