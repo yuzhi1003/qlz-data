@@ -845,6 +845,7 @@ function diffDoc(prev, next) {
   const p = {};
   SYNC_ARR.forEach(k => {
     const r = diffArr(prev[k], next[k]);
+    if (k === 'users' || k === 'groups') r.d = [];   // 人与群只增不删，删人走后台专用入口
     if (r.u.length || r.d.length) { p.c = p.c || {}; p.c[k] = r; }
   });
   SYNC_MSG.forEach(k => {
@@ -885,12 +886,29 @@ function hasPatch(p) {
     (p.v && Object.keys(p.v).length) || p.s));
 }
 
-function mergeArr(cur, r) {
+function mergeArr(cur, r, key) {
   let arr = (cur || []).slice();
   if (r.d && r.d.length) { const dels = new Set(r.d); arr = arr.filter(x => !dels.has(x.id)); }
   (r.u || []).forEach(item => {
     const i = arr.findIndex(x => x.id === item.id);
-    if (i > -1) arr[i] = item; else arr.push(item);
+    if (i < 0) { arr.push(item); return; }
+    const a = arr[i] || {};
+    if (key === 'groups') {
+      // 群：成员取并集，别台设备的新人不会被本地旧名单冲掉
+      const m = Object.assign({}, a, item);
+      m.members = Array.from(new Set([].concat(a.members || [], item.members || [])));
+      if (a.isMain || item.isMain) m.isMain = true;
+      if (!m.name) m.name = a.name || '清平乐·醉清欢';
+      arr[i] = m;
+    } else if (key === 'users') {
+      const m = Object.assign({}, a, item);
+      m.friends = Array.from(new Set([].concat(a.friends || [], item.friends || [])));
+      m.deviceIds = Array.from(new Set([].concat(a.deviceIds || [], item.deviceIds || [],
+        a.deviceId ? [a.deviceId] : [], item.deviceId ? [item.deviceId] : [])));
+      // 旧快照里的默认签名不该盖掉改过的签名
+      if (item.sig === DEFAULT_SIG && a.sig && a.sig !== DEFAULT_SIG) m.sig = a.sig;
+      arr[i] = m;
+    } else { arr[i] = item; }
   });
   return arr;
 }
@@ -898,10 +916,10 @@ function mergeArr(cur, r) {
 function applyPatchTo(doc, p) {
   if (!p) return doc;
   normalizeDoc(doc);
-  Object.keys(p.c || {}).forEach(k => { doc[k] = mergeArr(doc[k], p.c[k]); });
+  Object.keys(p.c || {}).forEach(k => { doc[k] = mergeArr(doc[k], p.c[k], k); });
   Object.keys(p.m || {}).forEach(k => {
     doc[k] = doc[k] || {};
-    Object.keys(p.m[k]).forEach(c => { doc[k][c] = mergeArr(doc[k][c], p.m[k][c]); });
+    Object.keys(p.m[k]).forEach(c => { doc[k][c] = mergeArr(doc[k][c], p.m[k][c], k); });
   });
   Object.keys(p.v || {}).forEach(k => {
     doc[k] = doc[k] || {};
@@ -1022,7 +1040,7 @@ async function ghPoll(force) {
   if (cur.sha === DB.sha && !force) return;
   if (!cur.doc || !cur.doc.users) { DB.sha = cur.sha; return; }
   const auth = localAuth();
-  if (auth.me && !findMine(cur.doc.users)) { DB.sha = cur.sha; return; }
+  if (auth.me && !findMine(cur.doc.users)) auth.me = null;   // 认领失败照常下载，别把整份云端数据挡在门外
   const localSnap = snapshot();
   const base = normalizeDoc(Object.assign(cur.doc, auth));
   DB.last = JSON.parse(JSON.stringify(base));
@@ -2283,7 +2301,11 @@ function renderFriends() {
   const outgoing = state.reqs.filter(r => r.from === m.id && r.status !== 'pending').slice(0, 6);
   const sentPending = state.reqs.filter(r => r.from === m.id && r.status === 'pending');
   const friends = m.friends.map(id => userById(id)).filter(Boolean);
-  const others = state.users.filter(u => u.id !== m.id);
+  const mainG = state.groups.find(g => g.isMain);
+  const seenIds = new Set(state.users.map(u => u.id));
+  const ghosts = ((mainG && mainG.members) || []).filter(id => !seenIds.has(id))
+    .map(id => ({ id, name: '故人', role: 'member', sig: '资料未同步', ghost: true }));
+  const others = state.users.filter(u => u.id !== m.id).concat(ghosts);
 
   let html = `<div class="card" style="padding:11px 14px;background:rgba(255,255,255,.7)">
     <p class="hint">← 在本页向左滑动，可打开「个人设置」（头像、签名、主页背景、音乐、聊天背景与启动画面，启动画面可自定义为噜噜视频，桀桀桀）。</p>
@@ -2847,7 +2869,7 @@ function viewMembers(gid) {
   const g = state.groups.find(x => x.id === gid); if (!g) return;
   openModal(`<h3>${esc(g.name)} · 成员</h3>
     ${g.members.map(id => {
-    const u = userById(id) || {}; return `<div class="friend-row"><img src="${avatarOf(u)}">
+    const u = userById(id) || { name: '故人', sig: '资料未同步' }; return `<div class="friend-row"><img src="${avatarOf(u)}">
         <div class="f-main"><div class="f-name">${esc(u.name || '')}${isAdmin(u) ? ' <span class="badge badge-role">' + ROLE[u.role] + '</span>' : ''}</div>
         <div class="f-sub">${esc(u.sig || '')}</div></div></div>`;
   }).join('')}
@@ -3014,6 +3036,10 @@ function normalizeExtras(doc){
   // 只保留大群聊
   const main = (doc.groups||[]).find(g=>g.isMain);
   if(main){
+    // 在册的人自动是大群成员，避免「群里看得到、名单里没有」
+    const ids = new Set(main.members || []);
+    (doc.users||[]).forEach(u=>{ if(u && u.id) ids.add(u.id); });
+    main.members = Array.from(ids);
     const keep=[main.id];
     (doc.groups||[]).forEach(g=>{ if(!g.isMain && (g.members||[]).length) g.members=[]; });
     doc.groups = (doc.groups||[]).filter(g=>g.isMain);
