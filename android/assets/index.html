@@ -176,8 +176,8 @@ main{padding:14px 14px 84px}
 .m-imgs{display:grid;gap:4px;padding:0 0 0;grid-template-columns:repeat(3,1fr)}
 .m-imgs.one{grid-template-columns:1fr}
 .m-imgs.two{grid-template-columns:repeat(2,1fr)}
-.m-imgs img{width:100%;aspect-ratio:1/1;object-fit:cover;display:block}
-.m-imgs.one img{aspect-ratio:4/3}
+.m-imgs img{width:100%;aspect-ratio:1/1;object-fit:cover;display:block;border-radius:3px;cursor:zoom-in}
+.m-imgs.one img{aspect-ratio:3/4;border-radius:6px}
 .m-actions{display:flex;gap:18px;padding:10px 14px;border-top:1px solid rgba(120,100,70,.08)}
 .m-act{font-size:12px;color:var(--ink-2);display:inline-flex;gap:5px;align-items:center;background:none;border:none;padding:2px 0}
 .m-act.liked{color:var(--cinnabar)}
@@ -315,9 +315,10 @@ main{padding:14px 14px 84px}
 .msg.sys{max-width:100%;margin:0 auto;justify-content:center;text-align:center}
 .msg.sys .bubble{background:rgba(255,255,255,.7);color:var(--sub);font-size:11px;border-radius:999px;padding:4px 12px;box-shadow:none}
 .msg .who{font-size:10.5px;color:rgba(0,0,0,.45);margin-bottom:3px;margin-left:2px}
-.chat-input{display:flex;gap:8px;padding:10px 10px calc(10px + env(safe-area-inset-bottom));background:rgba(253,250,243,.97);border-top:1px solid var(--line);align-items:center}
+.chat-input{display:flex;gap:8px;padding:10px 10px calc(10px + env(safe-area-inset-bottom));background:rgba(253,250,243,.97);border-top:1px solid var(--line);align-items:flex-end}
 .chat-input .plus{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--jade);font-size:18px;flex:none}
-.chat-input input{flex:1;min-width:0;border:1px solid var(--line);border-radius:18px;padding:10px 14px;font-size:14px;background:#fffefb;outline:none}
+.chat-input input,.chat-input textarea{flex:1;min-width:0;border:1px solid var(--line);border-radius:18px;padding:10px 14px;font-size:14px;background:#fffefb;outline:none}
+.chat-input textarea{resize:none;max-height:120px;line-height:1.5;font-family:inherit}
 .chat-input .send{width:56px;flex:none;border-radius:18px;border:none;background:linear-gradient(180deg,#35695b,#2a5347);color:#f6efdf;padding:10px 0;font-size:14px;letter-spacing:1px}
 
 /* 个人主页 */
@@ -443,7 +444,7 @@ audio{width:100%;margin-top:6px}
   <div class="chat-body" id="chatBody"></div>
   <div class="chat-input">
     <button class="plus" id="chatImg">＋</button>
-    <input id="chatInput" placeholder="花一笺，与卿评……" autocomplete="off">
+    <textarea id="chatInput" rows="1" placeholder="花一笺，与卿评……"></textarea>
     <button class="send" id="chatSend">寄</button>
   </div>
 </section>
@@ -596,7 +597,7 @@ function saveState() {
 function npcUsers() {
   return [
     { id: 'u_jyz', name: '大雪', sig: '风漫漫，雪云澜。', seedKey: 'yx' },
-   
+    { id: 'u_gy', name: '故雨', sig: '故雨知时节，润物细无声。', seedKey: 'gy' },
     ].map((u, i) => ({
     ...u,
     avatar: svgAvatar(u.name),
@@ -676,7 +677,7 @@ function baseState() {
       content: '【开帮公告】\n清平乐自11月28日起，一应事务由即任大当家定夺。\n接龙必实名、投票可匿名、统计每日一填。愿诸君在此，各得一段醉清欢。',
       imgs: []
     }],
-    groups: [], groupMsgs: {}, dm: {}, reqs: [], flyflowers: [], rolesV: 0,
+    groups: [], groupMsgs: {}, dm: {}, reqs: [], flyflowers: [], updates: [], gnameReqs: [], rolesV: 0,
     visits, likes, seq: 0
   };
 }
@@ -738,6 +739,7 @@ function boot() {
   if (!Array.isArray(state.flyflowers)) state.flyflowers = [];
   if (state.rolesV == null) state.rolesV = 0;
   normalizeRoles();
+  normalizeExtras(state);
   if (state.me) {
     const before = state.notices.length;
     state.notices = state.notices.filter(n =>
@@ -767,7 +769,7 @@ const cloudOn = () => CLOUD.p === 'gh'
 if (!CLOUD.branch) CLOUD.branch = 'main';
 if (!CLOUD.path) CLOUD.path = 'qlz-data.json';
 
-const SYNC_ARR = ['users', 'posts', 'signups', 'polls', 'stats', 'notices', 'groups', 'reqs', 'flyflowers'];
+const SYNC_ARR = ['users', 'posts', 'signups', 'polls', 'stats', 'notices', 'groups', 'reqs', 'flyflowers', 'updates', 'gnameReqs'];
 const SYNC_MSG = ['groupMsgs', 'dm'];
 const DB = { ready: false, last: null, rev: null, channel: null, sb: null, busy: false, timer: null, poll: null, lastEvent: 0 };
 let cloudReady = Promise.resolve();
@@ -797,11 +799,12 @@ function findMine(users) {
   return u || null;
 }
 function normalizeDoc(doc) {
-  ['users', 'posts', 'signups', 'polls', 'stats', 'notices', 'groups', 'reqs', 'flyflowers'].forEach(k => { if (!Array.isArray(doc[k])) doc[k] = []; });
+  ['users', 'posts', 'signups', 'polls', 'stats', 'notices', 'groups', 'reqs', 'flyflowers', 'updates', 'gnameReqs'].forEach(k => { if (!Array.isArray(doc[k])) doc[k] = []; });
   ['groupMsgs', 'dm', 'visits', 'likes'].forEach(k => { if (!doc[k] || typeof doc[k] !== 'object') doc[k] = {}; });
   if (!doc.rules) doc.rules = (typeof DEFAULT_RULES !== 'undefined' ? DEFAULT_RULES : '');
   if (doc.rolesV == null) doc.rolesV = 0;
   if (doc.wipeV == null) doc.wipeV = 0;
+  if (typeof normalizeExtras === 'function') doc = normalizeExtras(doc);
   return doc;
 }
 
@@ -1701,7 +1704,14 @@ function settleItems() {
   });
   if (changed) { saveState(); renderAll(); toast('有帮会事项已满二十四小时，自动结算完成'); }
 }
-function settleTick() { settleItems(); setInterval(settleItems, 20000); }
+function settleTick() {
+  settleItems(); settleRename();
+  setInterval(() => {
+    settleItems(); settleRename();
+    const m = me();
+    if (m && Date.now() - (m.lastSeen || 0) > 90000) { m.lastSeen = Date.now(); saveState(); }
+  }, 20000);
+}
 
 /* =========================================================
    渲染
@@ -2005,7 +2015,7 @@ function renderDaily() {
     .filter(n => n.published || (can && n.publishAt))
     .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.time - a.time);
 
-  let html = `<div class="card" style="padding:12px 14px">
+  let html = renderUpdatesCard() + `<div class="card" style="padding:12px 14px">
     <div class="card-title" style="margin-bottom:6px"><span class="bar"></span>今日公告<span class="tag">每日清平</span></div>
     <p class="hint">${can ? '你为管理员，可在此发布今日公告与图片，亦可定时发布；系统每日自动总结昨日重大事件。'
       : '公告由六名管理员（含群主、开发者）发布，可指定发布时间。成员可阅，不可发。'}</p>
@@ -2016,7 +2026,7 @@ function renderDaily() {
     const scheduled = !n.published;
     html += `<div class="notice ${n.pinned ? 'pinned' : ''}">
       <div class="n-head">
-        <img src="${avatarOf(userById(n.authorId))}" style="width:28px;height:28px;border-radius:50%">
+        <img src="${authorAvatar(n)}" style="width:28px;height:28px;border-radius:50%">
         <div><div class="n-title">${esc(n.authorName || '清平乐')}</div>
         <div class="meta">${scheduled ? `<span class="badge badge-wait">定时发布 · ${fmtFull(n.publishAt)}</span>` : fmtFull(n.time)}</div></div>
         ${n.pinned ? `<span class="badge badge-pin" style="margin-left:auto">置顶</span>` : ''}
@@ -2104,11 +2114,12 @@ function delNotice(id) {
 
 /* ---------- 花繁若轩 ---------- */
 let draftImgs = [];
+let draftText = '';
 function renderMoments() {
   const m = me(), can = isAdmin(m);
   let html = `<div class="card">
     <div class="card-title"><span class="bar"></span>花繁若轩<span class="tag">朋友圈 · 可附图</span></div>
-    <textarea class="ta" id="postTa" rows="3" placeholder="今日山水、心事与清欢……"></textarea>
+    <textarea class="ta" id="postTa" rows="3" oninput="draftText=this.value" placeholder="今日山水、心事与清欢……">${esc(draftText)}</textarea>
     <div class="img-pick" id="postImgs">${draftImgs.map((s, i) =>
       `<div class="thumb"><img src="${s}"><span onclick="delDraftImg(${i})">×</span></div>`).join('')}</div>
     <div class="row mt8">
@@ -2145,13 +2156,17 @@ function renderMoments() {
 }
 function addDraftImg() {
   if (draftImgs.length >= 9) return toast('最多 9 张');
-  pickImage(d => { draftImgs.push(d); renderMoments(); }, 1600);
+  pickImage(d => { draftText = ($('#postTa')||{}).value || draftText; draftImgs.push(d); renderMoments(); }, 1280);
 }
 function delDraftImg(i) { draftImgs.splice(i, 1); renderMoments(); }
 function publishPost() {
   const m = me();
   const text = ($('#postTa').value || '').trim();
   if (!text && !draftImgs.length) return toast('写点什么，或选一张图');
+  const err = checkText(text, { links: true, words: true });
+  if (err) return toast(err);
+  if (!rateOK('msg')) return;
+  draftText = '';
   state.posts.unshift({ id: uid('p'), uid: m.id, content: text, imgs: draftImgs.slice(), time: Date.now(), likes: [] });
   draftImgs = [];
   saveState(); renderMoments(); toast('已发布到花繁若轩');
@@ -2273,7 +2288,8 @@ function renderFriends() {
       <img src="${avatarOf(u)}">
       <div class="f-main"><div class="f-name">${esc(u.name)}${isAdmin(u) ? ' <span class="badge badge-role">' + ROLE[u.role] + '</span>' : ''}</div>
       <div class="f-sub">${esc(u.sig || '')}</div></div>
-      <button class="btn-mini btn-ghost" style="width:auto;padding:6px 10px" onclick="event.stopPropagation();openDM('${u.id}')">私聊</button></div>`;
+      <button class="btn-mini btn-ghost" style="width:auto;padding:6px 10px" onclick="event.stopPropagation();openDM('${u.id}')">私聊</button>
+      <button class="btn-mini btn-ghost" style="width:auto;padding:6px 10px;color:var(--cinnabar)" onclick="event.stopPropagation();removeFriend('${u.id}')">解除</button></div>`;
   });
   html += `</div>`;
 
@@ -2368,7 +2384,8 @@ function openProfile(id) {
         <div class="p-actions">
           ${id === state.me ? '' : `<button class="btn btn-primary" onclick="closeModal();openDM('${id}')">私聊</button>`}
           ${id === state.me ? `<button class="btn btn-primary" onclick="closeModal();openDrawer()">编辑我的资料</button>`
-      : isFriend(state.me, id) ? `<button class="btn btn-ghost" disabled style="opacity:.6">已是好友</button>`
+      : isFriend(state.me, id) ? `<button class="btn btn-ghost" style="opacity:.6" disabled>已是好友</button>
+        <button class="btn btn-ghost" style="color:var(--cinnabar)" onclick="removeFriend('${id}')">解除好友</button>`
         : `<button class="btn btn-ghost" onclick="closeModal();applyFriend('${id}')">申请加为好友</button>`}
         </div>
       </div></div>
@@ -2402,17 +2419,22 @@ function renderDrawer() {
   <div class="set-group">
     <h4>主页与启动</h4>
     ${line('主页背景', m.bg ? '已设置' : '默认山水', m.bg ? '更换' : '上传', 'setBg()')}
+    ${m.bg ? `<div class="row"><button class="btn btn-mini btn-ghost" onclick="resetMedia('bg')">恢复默认背景</button></div>` : ''}
     ${line('主页音乐', m.music ? '已设置（本地音频）' : '未设置（本地音频）', m.music ? '更换' : '上传', 'setMusic()')}
     ${m.music ? `<audio controls src="${m.music}" style="margin-top:8px"></audio>
       <div class="row mt8"><button class="btn btn-mini btn-ghost" onclick="removeMusic()">移除主页音乐</button></div>` : ''}
     ${line('启动画面', m.splash ? '已设置' : '默认「清平乐」', m.splash ? '更换' : '上传', 'setSplash()')}
+    ${m.splash ? `<div class="row"><button class="btn btn-mini btn-ghost" onclick="resetMedia('splash')">恢复默认启动画面</button></div>` : ''}
     <p class="hint" style="margin-top:8px">主页音乐自本地文件上传，好友打开你的主页时会自动播放（系统静音时不打扰）。</p>
   </div>
   <div class="set-group">
     <h4>聊天定制</h4>
     ${line('聊天背景', m.chatBg ? '已设置' : '默认宣纸', m.chatBg ? '更换' : '上传', 'setChatBg()')}
+    ${m.chatBg ? `<div class="row"><button class="btn btn-mini btn-ghost" onclick="resetMedia('chatBg')">恢复默认聊天背景</button></div>` : ''}
     ${line('聊天音乐', m.chatMusic ? '已设置' : '未设置（本地音频）', m.chatMusic ? '更换' : '上传', 'setChatMusic()')}
-    ${m.chatMusic ? `<audio controls src="${m.chatMusic}" style="margin-top:8px"></audio>` : ''}
+    ${m.chatMusic ? `<audio controls src="${m.chatMusic}" style="margin-top:8px"></audio>
+      <div class="row"><button class="btn btn-mini btn-ghost" onclick="resetMedia('chatMusic')">恢复默认（无声）</button></div>` : ''}
+    <div class="set-line"><div class="lbl">回车键</div><div class="val">${(localStorage.getItem('qlz_enter') === 'nl') ? '回车换行' : '回车发送'}</div><button class="act" onclick="toggleEnter()">切换</button></div>
     <p class="hint" style="margin-top:8px">聊天背景与音乐仅在本机生效，进入任一聊天即刻应用。</p>
   </div>
   <div class="set-group">
@@ -2456,7 +2478,7 @@ function logout() {
 }
 
 function setAvatar() {
-  pickImage(d => { me().avatar = d; saveState(); renderAll(); toast('头像已更换'); }, 320);
+  pickImage(d => { me().avatar = d; saveState(); renderAll(); toast('头像已更换'); }, 128);
 }
 function setBg() {
   pickImage(d => { me().bg = d; saveState(); renderAll(); toast('主页背景已更换'); }, 1600);
@@ -2494,6 +2516,21 @@ function setChatBg() {
 function setChatMusic() {
   pickAudio((d, n) => { me().chatMusic = d; saveState(); renderAll(); toast('已设聊天音乐：' + n); });
 }
+function toggleEnter(){
+  const now = localStorage.getItem('qlz_enter') === 'nl' ? 'send' : 'nl';
+  localStorage.setItem('qlz_enter', now === 'nl' ? 'nl' : 'send');
+  toast(now === 'nl' ? '回车改为换行，发送请按「寄」' : '回车改为发送');
+  renderDrawer();
+}
+function resetMedia(k){
+  const m=me(); if(!m) return;
+  if(k==='music'){ m.music=null; stopProfileMusic(); toast('主页音乐已恢复默认（无声）'); }
+  if(k==='chatMusic'){ m.chatMusic=null; stopChatMusic(); toast('聊天音乐已恢复默认'); }
+  if(k==='bg'){ m.bg=null; toast('主页背景已恢复默认山水'); }
+  if(k==='chatBg'){ m.chatBg=null; toast('聊天背景已恢复默认宣纸'); }
+  if(k==='splash'){ m.splash=null; toast('启动画面已恢复默认'); }
+  saveState(); renderAll(); renderDrawer(); if(chatCtx) applyChatStyle();
+}
 function editName() {
   askForm({
     title: '修改昵称', fields: [{ key: 'name', label: '新昵称', value: me().name }],
@@ -2514,7 +2551,10 @@ function editName() {
 function editSig() {
   askForm({
     title: '修改签名', fields: [{ key: 'sig', label: '个性签名', type: 'textarea', value: me().sig, rows: 2 }],
-    onSubmit: v => { me().sig = v.sig; saveState(); renderAll(); toast('签名已更新'); }
+    onSubmit: v => {
+      if(me().role!=='developer' && sigLen(v.sig)>SIG_MAX){ toast('签名限 '+SIG_MAX+' 字（不含标点）'); return false; }
+      me().sig = v.sig; saveState(); renderAll(); toast('签名已更新');
+    }
   });
 }
 
@@ -2547,6 +2587,21 @@ function openAdmin() {
     const u = userById(p.uid) || {};
     return `<button class="pill" onclick="delPost('${p.id}')">删：${esc(u.name || '')} · ${esc((p.content || '图片').slice(0, 8))}</button>`;
   }).join('') || '<span class="hint">暂无动态</span>'}</div>
+    ${isDev ? `<div class="section-label" style="margin-top:14px">数据（仅开发者可见）</div>
+      <div class="p-stat" style="justify-content:space-around;display:flex">
+        <span><b>${devStats().online}</b>在线</span>
+        <span><b>${devStats().week}</b>近七日活跃</span>
+        <span><b>${devStats().total}</b>总注册</span>
+      </div>
+      <p class="hint" style="text-align:center;margin-top:6px">在线＝五分钟内有心跳；活跃＝七日内有心跳</p>` : ''}
+    ${isDev && state.gnameReqs.filter(r => r.status === 'pending').length ? `<div class="section-label" style="margin-top:14px">群名申请</div>
+      <div class="pill-row">${state.gnameReqs.filter(r => r.status === 'pending').map(r => {
+        const u = userById(r.from) || {};
+        return `<button class="pill" onclick="approveRename('${r.id}',1)">准：${esc(u.name || '')} → ${esc(r.name)}</button>
+                <button class="pill" onclick="approveRename('${r.id}',0)">驳</button>`;
+      }).join('')}</div>` : ''}
+    ${isDev ? `<div class="section-label" style="margin-top:14px">更新公告</div>
+      <button class="btn btn-ghost mb8" onclick="closeModal();publishUpdate()">发布修复更新公告（当前 ${(state.updates || []).length} 条）</button>` : ''}
     <div class="row mt12"><button class="btn btn-ghost" onclick="closeModal()">收起</button></div>`);
 }
 function appoint(role) {
@@ -2595,9 +2650,9 @@ let chatAudio = null;
 
 function dmKey(a, b) { return [a, b].sort().join('|'); }
 function openDM(id) {
-  toast('无服务器，本知正在闭关中，暂时屏蔽私聊功能。');
-  return;
   const u = userById(id); if (!u) return;
+  if (isBlocked(id)) return toast('你已与「' + u.name + '」解除好友，重新申请通过后方可再聊。');
+  if (!isFriend(state.me, id)) return toast('你们还不是好友，先在主页提交好友申请。');
   chatCtx = { type: 'dm', id };
   $('#chatName').textContent = u.name;
   $('#chatSub').textContent = (u.role !== 'member' ? ROLE[u.role] + ' · ' : '') + (u.sig || '');
@@ -2673,6 +2728,11 @@ function renderChat() {
 }
 function sendChatMsg(kind, text) {
   if (!chatCtx) return;
+  if (kind !== 'img') {
+    const err = checkText(text, { max: 90, links: true, words: true });
+    if (err) return toast(err);
+  }
+  if (!rateOK(kind === 'img' ? 'img' : 'msg')) return;
   const list = chatMessages();
   const msg = { id: uid('m'), from: state.me, nm: (me() || {}).name || '', text, kind: kind || 'text', time: Date.now() };
   list.push(msg);
@@ -2704,6 +2764,7 @@ function renameGroup(gid) {
     title: '修改群名称', fields: [{ key: 'name', label: '群名称', value: g.name }],
     onSubmit: v => {
       if (!v.name) { toast('群名不可为空'); return false; }
+      if(me().role!=='developer'){ requestRename(gid, v.name); closeModal(); return; }
       g.name = v.name; saveState(); renderFriends();
       if (chatCtx && chatCtx.type === 'group' && chatCtx.id === gid) $('#chatName').textContent = v.name;
       toast('群名称已改为「' + v.name + '」');
@@ -2868,6 +2929,146 @@ function init() {
   window.setMusic = setMusic; window.removeMusic = removeMusic;
   window.cloudConfig = cloudConfig; window.saveCloud = saveCloud; window.clearCloud = clearCloud;
 }
+/* ===================== v7 · 护栏与增补 ===================== */
+const SIG_MAX = 56;
+const DEFAULT_SIG = '春风不止，清平不散。';
+const LINK_RE = /(https?:\/\/|www\.|\bt\.cn\b|b23\.tv|\.com|\.cn\/|\.net|\.top|\.xyz|\.io\/)/i;
+const BANNED = ['傻逼','傻b','煞笔','操你妈','草你妈','尼玛','你妈死','去死','贱人','婊子','脑残','智障','狗东西','废物','滚蛋','死全家'];
+function noPunct(t){ return String(t||'').replace(/[\s，。、；：！？,.!?;:'"“”‘’（）()《》〈〉—\-…·]/g,''); }
+function sigLen(t){ return noPunct(t).length; }
+function checkText(text, o){
+  o=o||{};
+  const t=String(text||'');
+  if(o.max && Array.from(t).length>o.max) return '太长了，请控制在 '+o.max+' 字以内。';
+  if(o.links && LINK_RE.test(t)) return '抱歉，目前本知不知道怎么识别是否为恶意代码，只能暂时全部禁止。请谅解，桀桀桀。';
+  if(o.words){ for(const w of BANNED){ if(t.indexOf(w)>-1) return '这句话里有不当之词，清平之地，好言相与。'; } }
+  return '';
+}
+const RATE = { msg: [], img: [] };
+const RATE_MAX = { msg: 5, img: 3 };
+function rateOK(kind){
+  const now=Date.now(), arr=RATE[kind]||(RATE[kind]=[]);
+  while(arr.length && now-arr[0]>60000) arr.shift();
+  if(arr.length >= RATE_MAX[kind]){
+    toast('慢些，'+(kind==='img'?'图片':'消息')+'每分钟最多 '+RATE_MAX[kind]+' 条，歇一口气再说。');
+    return false;
+  }
+  arr.push(now); return true;
+}
+function normalizeExtras(doc){
+  ['updates','gnameReqs'].forEach(k=>{ if(!Array.isArray(doc[k])) doc[k]=[]; });
+  // 只保留大群聊
+  const main = (doc.groups||[]).find(g=>g.isMain);
+  if(main){
+    const keep=[main.id];
+    (doc.groups||[]).forEach(g=>{ if(!g.isMain && (g.members||[]).length) g.members=[]; });
+    doc.groups = (doc.groups||[]).filter(g=>g.isMain);
+    Object.keys(doc.groupMsgs||{}).forEach(k=>{ if(!keep.includes(k)) delete doc.groupMsgs[k]; });
+  }
+  // 签名超字数者回默认（开发者除外）
+  (doc.users||[]).forEach(u=>{
+    if(u.role==='developer') return;
+    if(u.sig && sigLen(u.sig)>SIG_MAX) u.sig = DEFAULT_SIG;
+  });
+  if(doc.rulesTag==null) doc.rulesTag=1;
+  return doc;
+}
+function isBlocked(id){
+  const m=me(); return !!(m && Array.isArray(m.block) && m.block.indexOf(id)>-1);
+}
+function removeFriend(id){
+  const m=me(), u=userById(id); if(!m||!u) return;
+  confirmBox('解除好友','解除后双方不可互发消息，需重新申请才能恢复。确定？',()=>{
+    m.friends=(m.friends||[]).filter(x=>x!==id);
+    u.friends=(u.friends||[]).filter(x=>x!==m.id);
+    m.block=(m.block||[]); if(m.block.indexOf(id)<0) m.block.push(id);
+    state.dm[dmKey(m.id,id)]=[];
+    if(chatCtx && chatCtx.type==='dm' && chatCtx.id===id) closeChat();
+    saveState(); renderAll(); toast('已解除好友');
+  },'解除');
+}
+const OFFICIAL_AVATAR = 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(
+ '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="#f4ecda"/>' +
+ '<rect x="12" y="12" width="104" height="104" fill="#a8473c" opacity=".92"/>' +
+ '<rect x="19" y="19" width="90" height="90" fill="none" stroke="#f7f0df" stroke-width="1.3" opacity=".6"/>' +
+ '<text x="65" y="89" font-size="60" font-family="STKaiti,KaiTi,Kaiti SC,SimSun,serif" font-weight="600" fill="#f7f0df" text-anchor="middle">清</text></svg>');
+function authorAvatar(n){
+  if(!n || !n.authorId) return OFFICIAL_AVATAR;
+  const u=userById(n.authorId);
+  return u? avatarOf(u): OFFICIAL_AVATAR;
+}
+function renderUpdatesCard(){
+  const list=(state.updates||[]).slice().sort((a,b)=>b.time-a.time);
+  if(!list.length) return '';
+  let h=`<div class="card"><div class="card-title"><span class="bar"></span>修复更新公告<span class="tag">永久留存 · 署名 公语知</span></div>`;
+  list.forEach((it,i)=>{
+    h+=`<div class="notice ${i===0?'pinned':''}">
+      <div class="n-head"><img src="${OFFICIAL_AVATAR}" style="width:28px;height:28px;border-radius:50%">
+      <div><div class="n-title">公语知 · ${esc(it.ver||'更新')}</div><div class="meta">${fmtFull(it.time)}</div></div></div>
+      <div class="n-body">${esc(it.body)}</div></div>`;
+  });
+  return h+'</div>';
+}
+function publishUpdate(){
+  if(me().role!=='developer') return toast('仅开发者可发布更新公告');
+  askForm({title:'发布修复更新公告', desc:'草稿须先经群主审阅；署名统一为「公语知」，发布后永久留存。',
+    fields:[{key:'ver',label:'版本',ph:'v1.4'},{key:'body',label:'公告正文',type:'textarea',rows:6}],
+    ok:'发布', onSubmit:v=>{
+      if(!v.body){toast('正文不能空');return false;}
+      state.updates.unshift({id:uid('up'),ver:v.ver||'更新',body:v.body,time:Date.now()});
+      saveState(); renderDaily(); toast('更新公告已发布');
+    }});
+}
+function devStats(){
+  const us=state.users||[], now=Date.now();
+  const online=us.filter(u=>u.lastSeen && now-u.lastSeen<5*60000).length;
+  const week=us.filter(u=>u.lastSeen && now-u.lastSeen<7*86400000).length;
+  const total=us.length;
+  return {online, week, total};
+}
+function requestRename(gid, name){
+  const m=me(), g=state.groups.find(x=>x.id===gid); if(!m||!g) return;
+  const n=String(name||'').trim();
+  if(!n) return toast('名字不能空');
+  if(n.length>12) return toast('群名 12 字以内');
+  if(m.role==='developer'){ g.name=n; saveState(); renderAll(); toast('群名已改'); return; }
+  state.gnameReqs.unshift({id:uid('gr'),gid,from:m.id,name:n,time:Date.now(),status:'pending'});
+  saveState(); toast('已提交申请，七日内未审视为作废');
+}
+function settleRename(){
+  const now=Date.now(); let ch=false;
+  (state.gnameReqs||[]).forEach(r=>{ if(r.status==='pending' && now-r.time>7*86400000){ r.status='expired'; ch=true; } });
+  if(ch) saveState();
+}
+function approveRename(id, yes){
+  if(me().role!=='developer') return toast('仅开发者可审批');
+  const r=state.gnameReqs.find(x=>x.id===id); if(!r||r.status!=='pending') return;
+  if(yes){ const g=state.groups.find(x=>x.id===r.gid); if(g) g.name=r.name; r.status='ok'; toast('已批准'); }
+  else r.status='no';
+  saveState(); renderAll(); setTimeout(()=>{closeModal();openAdmin();},0);
+}
+function ensureChatInput(){
+  const el=$('#chatInput'); if(!el) return;
+  const fit=()=>{ el.style.height='auto'; el.style.height=Math.min(120, el.scrollHeight)+'px'; };
+  el.addEventListener('input',fit); fit();
+  el.addEventListener('keydown',e=>{
+    if(e.key!=='Enter') return;
+    const mode=localStorage.getItem('qlz_enter')||'send';
+    if(mode==='send' && !e.shiftKey){ e.preventDefault(); $('#chatSend').click(); }
+  });
+}
+window.qlzBack=function(){
+  try{
+    if($('#modalMask').classList.contains('show')){ closeModal(); return true; }
+    if($('#sheetMask').classList.contains('show')){ closeSheet(); return true; }
+    if($('#drawer').classList.contains('open')){ closeDrawer(); return true; }
+    if($('#chatView').classList.contains('show')){ closeChat(); return true; }
+  }catch(e){}
+  return false;
+};
+window.QLZ_BACK=window.qlzBack;
+
+try{ setTimeout(ensureChatInput, 60); }catch(e){}
 init();
 </script>
 <script>
