@@ -1963,6 +1963,7 @@ function renderAll() {
   if (chatCtx) markRead(chatCtx.type === 'dm' ? 'dm' : 'group', chatCtx.id);
   renderTools(); renderDaily(); renderMoments(); renderPoem(); renderFriends(); renderDrawer();
   refreshUnreadUI();
+  watchReqs();
   $$('.tab-item').forEach(n => {
     const old = n.querySelector('.nav-dot'); if (old) old.remove();
   });
@@ -2552,7 +2553,8 @@ function renderFriends() {
     sentPending.forEach(r => {
       const u = userById(r.to) || {};
       html += `<div class="friend-row"><img src="${avatarOf(u)}"><div class="f-main"><div class="f-name">${esc(u.name)}</div>
-        <div class="f-sub">等待对方验证 · ${fmtTime(r.time)}</div></div><span class="badge badge-wait">待验证</span></div>`;
+        <div class="f-sub">等待对方验证 · ${fmtTime(r.time)}</div></div>
+        <button class="btn-mini btn-ghost" style="width:auto;padding:6px 10px" onclick="withdrawReq('${r.id}')">撤回</button></div>`;
     });
     html += `</div>`;
   }
@@ -2601,9 +2603,22 @@ function decideReq(rid, yes) {
   if (r.status !== 'pending') return;
   if (yes) {
     r.status = 'accepted'; addFriends(r.from, r.to);
-    toast('已与「' + (userById(r.from) || {}).name + '」成为好友');
+    const nm = (userById(r.from) || {}).name || '对方';
+    toast('已与「' + nm + '」成为好友，直接开聊');
   } else { r.status = 'rejected'; toast('已拒绝该申请'); }
   saveState(); renderAll();
+  if (yes) { setTimeout(() => { try { renderAll(); openDM(r.from); } catch (e) { } }, 60); }
+}
+function withdrawReq(rid) {
+  const r = (state.reqs || []).find(x => x.id === rid);
+  if (!r) return;
+  state.reqs = state.reqs.filter(x => x.id !== rid);
+  try {
+    const k = 'qlz_pend_' + state.me;
+    const arr = JSON.parse(localStorage.getItem(k) || '[]').filter(x => x !== r.to);
+    localStorage.setItem(k, JSON.stringify(arr));
+  } catch (e) { }
+  saveState(); renderAll(); toast('已撤回申请');
 }
 function processNpcReqs() {
   let changed = false;
@@ -3030,16 +3045,42 @@ function maybeNotifyNative() {
   } catch (e) { }
 }
 
+function watchReqs() {
+  try {
+    if (!state.me) return;
+    const sk = 'qlz_req_seen_' + state.me;
+    let seen = []; try { seen = JSON.parse(localStorage.getItem(sk) || '[]'); } catch (e) { }
+    (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending').forEach(r => {
+      if (seen.indexOf(r.id) > -1) return;
+      seen.push(r.id);
+      const u = userById(r.from) || { name: '故人' };
+      toast('「' + u.name + '」申请加你为好友，到好友页同意');
+      try { if (window.QLZNative && QLZNative.notifyMsg) QLZNative.notifyMsg('清平乐 · 醉清欢', u.name + ' 申请加你为好友', 1); } catch (e) { }
+    });
+    localStorage.setItem(sk, JSON.stringify(seen.slice(-100)));
+    const ak = 'qlz_req_acc_' + state.me;
+    let acc = []; try { acc = JSON.parse(localStorage.getItem(ak) || '[]'); } catch (e) { }
+    (state.reqs || []).filter(r => r.from === state.me && r.status === 'accepted').forEach(r => {
+      if (acc.indexOf(r.id) > -1) return;
+      acc.push(r.id);
+      const u = userById(r.to) || { name: '对方' };
+      toast('「' + u.name + '」通过了你的申请，现在可以私聊了');
+    });
+    localStorage.setItem(ak, JSON.stringify(acc.slice(-100)));
+  } catch (e) { }
+}
 function refreshUnreadUI() {
   if (!state.me) return;
   maybeNotifyNative();
   const n = unreadTotal();
+  const pend = (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending').length;
+  const badgeN = n > 0 ? n : pend;
   const tab = $('.tab-item[data-tab="friends"]');
   if (tab) {
     let b = tab.querySelector('.nav-badge');
     if (!b) { b = document.createElement('div'); b.className = 'nav-badge'; tab.appendChild(b); }
-    b.textContent = n > 99 ? '99+' : n;
-    b.style.display = n > 0 ? 'flex' : 'none';
+    b.textContent = badgeN > 99 ? '99+' : badgeN;
+    b.style.display = badgeN > 0 ? 'flex' : 'none';
   }
   document.title = (n > 0 ? '(' + (n > 99 ? '99+' : n) + ') ' : '') + '清平乐 · 醉清欢';
 }
