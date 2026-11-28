@@ -369,6 +369,24 @@ main{padding:14px 14px 84px}
 audio{width:100%;margin-top:6px}
 
 .pm-badge{position:absolute;right:12px;top:12px;z-index:2;font-size:11.5px;letter-spacing:1px;color:#fdf6e6;background:rgba(47,93,80,.72);padding:4px 10px;border-radius:999px;backdrop-filter:blur(4px)}
+
+/* ===== 更新公告卡（宣纸书页样式） ===== */
+.upd-card{position:relative;overflow:hidden;border-radius:2px;border:1px solid rgba(66,56,40,.20);
+  background:#fffdf5;box-shadow:0 1px 0 #fff inset,0 10px 24px -16px rgba(70,55,35,.55)}
+.upd-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:linear-gradient(180deg,rgba(44,87,73,.55),rgba(44,87,73,.12))}
+.upd-card .card-title{font-family:"Kaiti SC","STKaiti","KaiTi","AR PL UKai CN",var(--serif);
+  font-size:15.5px;letter-spacing:3px;color:#1e3b31}
+.upd-card .card-title .bar{width:1px;height:16px;background:#9c3f34;border-radius:0;margin-right:2px}
+.upd-card .card-title .tag{font-size:10.5px;letter-spacing:1.5px;color:#9a8f7a}
+.upd-item{border-radius:2px;border:1px solid rgba(66,56,40,.18);background:#fffdf5;
+  padding:12px 13px;margin-bottom:10px;box-shadow:0 8px 18px -15px rgba(70,55,35,.6)}
+.upd-item:last-child{margin-bottom:0}
+.upd-item.pinned{border-color:rgba(156,63,52,.30)}
+.upd-item .n-head img{width:28px;height:28px;border-radius:2px;border:1px solid rgba(66,56,40,.15)}
+.upd-item .n-title{font-size:14px;letter-spacing:1px;color:#2c5749}
+.upd-item .meta{letter-spacing:1px;color:#9a8f7a}
+.upd-item .n-body{font-size:14px;line-height:1.85}
 </style>
 </head>
 <body>
@@ -3335,10 +3353,10 @@ function authorAvatar(n){
 function renderUpdatesCard(){
   const list=(state.updates||[]).slice().sort((a,b)=>b.time-a.time);
   if(!list.length) return '';
-  let h=`<div class="card"><div class="card-title"><span class="bar"></span>修复更新公告<span class="tag">永久留存 · 署名 公语知</span></div>`;
+  let h=`<div class="card upd-card"><div class="card-title"><span class="bar"></span>修复更新公告<span class="tag">永久留存 · 署名 公语知</span></div>`;
   list.forEach((it,i)=>{
-    h+=`<div class="notice ${i===0?'pinned':''}">
-      <div class="n-head"><img src="${OFFICIAL_AVATAR}" style="width:28px;height:28px;border-radius:50%">
+    h+=`<div class="upd-item ${i===0?'pinned':''}">
+      <div class="n-head"><img src="${OFFICIAL_AVATAR}" style="width:28px;height:28px;border-radius:2px">
       <div><div class="n-title">公语知 · ${esc(it.ver||'更新')}</div><div class="meta">${fmtFull(it.time)}</div></div></div>
       <div class="n-body">${esc(it.body)}</div></div>`;
   });
