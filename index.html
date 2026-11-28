@@ -790,7 +790,8 @@ CLOUD.tokens = String(CLOUD.token || '').split(/[\s,]+/).filter(t => /^(ghp_|git
 if (!CLOUD.tokens.length && CLOUD.token) CLOUD.tokens = [CLOUD.token];
 CLOUD.token = CLOUD.tokens[0] || CLOUD.token || '';
 CLOUD.tokIdx = 0;
-const POLL_MS = 5000;
+const POLL_MS = 3000;
+const POLL_SLOW = 12000;   // 被限流时临时降速，别把钥匙打废
 // 数据文件迁到 qlz-data-2.json：旧版外壳/旧缓存还会往 qlz-data.json 里写入已清空的数据，
 // 换一份它们不认识的档案，旧客户端的破坏就落不到新数据上
 if (CLOUD.path === 'qlz-data.json') CLOUD.path = 'qlz-data-2.json';
@@ -1025,6 +1026,7 @@ async function ghFetch(url, opts) {
     const r = await fetch(url, opts());
     if (r.status === 401 || r.status === 403 || r.status === 429) {
       last = r;
+      DB.slowUntil = Date.now() + 120000;   // 两分钟内降到 12 秒一查
       if (n > 1) { CLOUD.tokIdx = (CLOUD.tokIdx + 1) % n; continue; }  // 换下一把钥匙重试
       return r;
     }
@@ -1193,8 +1195,8 @@ async function ghInit() {
     DB.ready = true;
     persistLocal();
     if (!doc || !doc.users || !doc.users.length) queueSync();
-    if (DB.poll) clearInterval(DB.poll);
-    DB.poll = setInterval(() => pollOnce(false), POLL_MS);
+    if (DB.poll) clearTimeout(DB.poll);
+    (function tick(){ DB.poll = setTimeout(async () => { try{ await pollOnce(false); }catch(e){} tick(); }, pollNow()); })();
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && DB.ready) { pollOnce(true); }
     });
@@ -1314,6 +1316,9 @@ async function pullDoc(rev) {
   persistLocal();
 }
 
+function pollNow(){
+  return Date.now() > (DB.slowUntil || 0) ? POLL_MS : POLL_SLOW;
+}
 async function pollOnce(force) {
   if (!DB.ready) return;
   if (CLOUD.p === 'gh') { await ghPoll(force); return; }
@@ -1369,8 +1374,8 @@ async function cloudInit() {
     persistLocal();
     if (!doc || !doc.users || !doc.users.length) queueSync(); // 首次建库：把种子数据写上去
     startRealtime();
-    if (DB.poll) clearInterval(DB.poll);
-    DB.poll = setInterval(() => pollOnce(false), POLL_MS);
+    if (DB.poll) clearTimeout(DB.poll);
+    (function tick(){ DB.poll = setTimeout(async () => { try{ await pollOnce(false); }catch(e){} tick(); }, pollNow()); })();
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && DB.ready) { pollOnce(true); }
     });
