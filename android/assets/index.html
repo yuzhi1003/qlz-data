@@ -410,7 +410,7 @@ audio{width:100%;margin-top:6px}
     <button class="btn btn-wechat" id="btnWechat">微信一键登录</button>
     <div class="auth-note" id="authNote">
       本设备仅可注册一个账号，一经注册不可再开小号，桀桀桀。<br>
-      仅季云知成为本帮会「开发者」。
+      帮会仅设一位开发者，由首位注册者任之。
     </div>
   </div>
 </div>
@@ -652,83 +652,19 @@ function npcUsers() {
 
 function baseState() {
   const users = npcUsers();
-  const ids = users.map(u => u.id);
-  const now = Date.now();
-  const y = ymd(dayShift(-1));
   const visits = {}, likes = {};
-  // 昨日榜单演示数据
-  visits[y] = { u_jyz: 128, u_hf: 96, u_dm: 61, u_jin: 44, u_huan: 33, u_qing: 21, u_muyu: 18 };
-  likes[y] = { u_hf: 42, u_dm: 31, u_jyz: 27, u_huan: 15, u_tingxue: 9 };
-  likes[ymd()] = { u_hf: 6, u_dm: 3 };
-
-  users.forEach(u => { u.visitsTotal = Object.values(visits).reduce((s, m) => s + (m[u.id] || 0), 0); });
-
-  const posts = [
-    {
-      id: 'p_hf1', uid: 'u_hf', time: now - 23 * 3600000,
-      content: '今日有帅知的山色极好，云在肩头，知在袖里。\n发一张昨日画的大帅知，与诸君共赏清欢。',
-      imgs: [svgArt('a')], likes: ['u_jyz', 'u_dm', 'u_jin', 'u_huan', 'u_qing', 'u_muyu']
-    },
-    {
-      id: 'p_dm1', uid: 'u_dm', time: now - 9 * 3600000,
-      content: '新抄了一阕《如梦令》，墨还未干。\ndoyoulovemelove知love清照，来我主页坐坐。',
-      imgs: [], likes: ['u_hf', 'u_jyz', 'u_tingxue', 'u_nanzhi']
-    },
-    {
-      id: 'p_jin1', uid: 'u_jin', time: now - 3 * 3600000,
-      content: '帮里的接龙记得接呀，一人一接，不可匿名——这是咱欺负全服的默契。',
-      imgs: [svgArt('b')], likes: ['u_hf', 'u_muyu']
-    },
-    {
-      id: 'p_yan1', uid: 'u_yanhui', time: now - 40 * 60000,
-      content: '秋风起，雁南回。愿诸君夜间皆有星光，白日自有烟火。',
-      imgs: [], likes: ['u_jyz']
-    }
-  ];
+  // 空白起步：榜单和动态都等真人产生，不塞假数据
+  users.forEach(u => { u.visitsTotal = 0; });
+  const posts = [];
 
   return {
     version: 2, registered: false, me: null, users, posts,
     rules: DEFAULT_RULES,
-    signups: [{
-      id: 's_1', title: '本周帮战接龙 · 清平乐欺负全服名单', creatorId: null, creatorName: '清平乐·司礼',
-      pinned: true, createdAt: now - 5 * 3600000, expiresAt: now + 19 * 3600000, closed: false,
-      entries: [
-        { uid: 'u_jyz', name: '大雪', time: now - 4 * 3600000, note: '熹微' },
-        { uid: 'u_jin', name: '中雪', time: now - 3 * 3600000, note: '珞霞' },
-        { uid: 'u_huan', name:'小雪', time: now - 2 * 3600000, note: '寰珮' }
-      ]
-    }],
-    polls: [{
-      id: 'v_1', title: '下月帮会活动，你想去哪儿？', creatorId: null, creatorName: '清平乐·司礼',
-      pinned: true, anonymous: false, createdAt: now - 6 * 3600000, expiresAt: now + 18 * 3600000,
-      closed: false, options: [
-        { text: '黄昏欺负全服', votes: ['u_jyz', 'u_hf', 'u_dx'] },
-        { text: '落日全服欺负', votes: ['u_jin', 'u_zx'] },
-        { text: '线上诗词雅集', votes: ['u_qing', 'u_xx', 'u_muyu'] }
-      ]
-    }],
-    stats: [{
-      id: 't_1', title: '本周帮贡统计表', creatorId: null, creatorName: '清平乐·司礼',
-      pinned: true, anonymous: true, createdAt: now - 8 * 3600000, expiresAt: now + 16 * 3600000,
-      closed: false, desc: '请填写本周帮贡与在线时长，每人每天限填一次，可匿名。',
-      fields: [{ key: 'gong', label: '本周帮贡' }, { key: 'hour', label: '在线时长（小时）' }],
-      entries: [{ uid: 'u_jyz', anonymous: false, values: { gong: '520', hour: '12' }, time: now - 5 * 3600000 }]
-    }],
-    notices: [{
-      id: 'n_1', authorId: null, authorName: '清平乐·司礼', pinned: true, published: true,
-      time: now - 26 * 3600000, publishAt: null,
-      content: '【开帮公告】\n清平乐自11月28日起，一应事务由即任大当家定夺。\n接龙必实名、投票可匿名、统计每日一填。愿诸君在此，各得一段醉清欢。',
-      imgs: []
-    }],
+    signups: [], polls: [], stats: [], notices: [],
     groups: [], groupMsgs: {}, dm: {}, reqs: [], flyflowers: [], updates: [], gnameReqs: [], tombs: [], rolesV: 0,
     visits, likes, seq: 0
   };
 }
-
-/* ---------- 清旧号（v6）：清空历史注册数据，从根上断掉「故人」重影 ---------- */
-const WIPE_V = 6;
-/* v6 强制清号已停用：它会误删真实注册用户并清空私聊，历史包袱到此为止。 */
-function purgeUsers(doc) { return doc; }
 
 function boot() {
   setTimeout(() => { try { if (!keyPoolReady) askKeyPass(); } catch (e) {} }, 1200);
@@ -744,7 +680,6 @@ function boot() {
   state = loadState();
   if (!state) { state = baseState(); saveState(); }
   if (!state.users) state = baseState();
-  // 清号逻辑已停用
 
   // 兼容旧数据：更新清平准则；移除本人置顶的「开帮」欢迎公告
   const OLD_RULE_HEAD = '一、芝兰同室，君子同芳';
@@ -849,8 +784,7 @@ function askKeyPass() {
 }
 const POLL_MS = 3000;
 const POLL_SLOW = 12000;   // 被限流时临时降速，别把钥匙打废
-// 数据文件迁到 qlz-data-2.json：旧版外壳/旧缓存还会往 qlz-data.json 里写入已清空的数据，
-// 换一份它们不认识的档案，旧客户端的破坏就落不到新数据上
+// 换到 -2 号档案文件，旧壳子不认识它，不会再把空壳写回来
 if (CLOUD.path === 'qlz-data.json') CLOUD.path = 'qlz-data-2.json';
 
 const SYNC_ARR = ['users', 'posts', 'signups', 'polls', 'stats', 'notices', 'groups', 'reqs', 'flyflowers', 'updates', 'gnameReqs', 'tombs'];
@@ -885,10 +819,19 @@ function findMine(users) {
 function normalizeDoc(doc) {
   ['users', 'posts', 'signups', 'polls', 'stats', 'notices', 'groups', 'reqs', 'flyflowers', 'updates', 'gnameReqs'].forEach(k => { if (!Array.isArray(doc[k])) doc[k] = []; });
   ['groupMsgs', 'dm', 'visits', 'likes'].forEach(k => { if (!doc[k] || typeof doc[k] !== 'object') doc[k] = {}; });
+  if (!Array.isArray(doc.delIds)) doc.delIds = [];      // 销号墓碑：被删的 id 记在这里，本机备份永远不许把它们复活
   if (!doc.rules || /^1\.\s*11月27日之前/.test(String(doc.rules).trim())) doc.rules = (typeof DEFAULT_RULES !== 'undefined' ? DEFAULT_RULES : '');
   if (doc.rolesV == null) doc.rolesV = 0;
   if (doc.wipeV == null) doc.wipeV = 0;
   if (typeof normalizeExtras === 'function') doc = normalizeExtras(doc);
+  // delIds 是墓碑，读的时候也过一遍
+  if (Array.isArray(doc.delIds) && doc.delIds.length) {
+    doc.users = (doc.users || []).filter(u => doc.delIds.indexOf(u.id) < 0);
+    (doc.groups || []).forEach(g => { if (Array.isArray(g.members)) g.members = g.members.filter(id => doc.delIds.indexOf(id) < 0); });
+  }
+  // 申请两端都得是活人，销号留下的申请清掉
+  const liveIds = new Set((doc.users || []).map(u => u.id));
+  doc.reqs = (doc.reqs || []).filter(r => liveIds.has(r.from) && liveIds.has(r.to));
   return doc;
 }
 
@@ -902,6 +845,7 @@ function snapshot() {
   o.rules = state.rules || '';
   o.rolesV = state.rolesV || 0;
   o.wipeV = state.wipeV || 0;
+  o.delIds = state.delIds || [];
   return JSON.parse(JSON.stringify(o));
 }
 
@@ -949,6 +893,7 @@ function diffDoc(prev, next) {
   const sc = {};
   if (prev.rules !== next.rules && DB.rulesDirty) sc.rules = next.rules;   // 准则只由管理员主动保存时才推送，避免旧设备把它盖回去
   if (prev.rolesV !== next.rolesV) sc.rolesV = next.rolesV;
+  if ((prev.delIds || []).length !== (next.delIds || []).length) sc.delIds = next.delIds || [];
   if ((prev.wipeV || 0) !== (next.wipeV || 0)) sc.wipeV = next.wipeV || 0;
   if (Object.keys(sc).length) p.s = sc;
   return p;
@@ -1022,7 +967,24 @@ function applyPatchTo(doc, p) {
       });
     });
   });
-  if (p.s) Object.assign(doc, p.s);
+  if (p.s) {
+    const sd = p.s.delIds;
+    delete p.s.delIds;
+    Object.assign(doc, p.s);
+    if (Array.isArray(sd)) doc.delIds = Array.from(new Set([].concat(doc.delIds || [], sd)));
+  }
+  // 墓碑生效：任何路径都不许让被删的账号回来
+  if (Array.isArray(doc.delIds) && doc.delIds.length) {
+    doc.users = (doc.users || []).filter(u => doc.delIds.indexOf(u.id) < 0);
+  }
+  // 群成员只认在册的人：被删账号的 id 不许继续挂在名单里，否则人数会虚高
+  const __live = new Set((doc.users || []).map(u => u.id));
+  (doc.groups || []).forEach(g => {
+    if (Array.isArray(g.members)) {
+      const ms = g.members.filter(m => __live.has(m));
+      if (ms.length !== g.members.length) g.members = ms;
+    }
+  });
   return doc;
 }
 
@@ -1103,7 +1065,21 @@ async function ghRead(cond) {
   try { DB.etag = r.headers.get('ETag') || DB.etag; } catch (e) { }
   const j = await r.json();
   let doc = null;
-  try { doc = JSON.parse(b64dec(j.content)); } catch (e) { doc = null; }
+  // Contents 接口对 1MB 以上的文件不回 content，只给 download_url
+  if (j.content) {
+    try { doc = JSON.parse(b64dec(j.content)); } catch (e) { doc = null; }
+  }
+  if (!doc && j.sha) {
+    // 大文件走 blobs，按 sha 取原字节
+    try {
+      const br = await ghFetch(GHAPI + '/repos/' + CLOUD.owner + '/' + CLOUD.repo + '/git/blobs/' + j.sha, () => ({ headers: ghH(), cache: 'no-store' }));
+      if (br.ok) {
+        const bj = await br.json();
+        if (bj && bj.content) doc = JSON.parse(b64dec(bj.content));
+      }
+    } catch (e) { doc = null; }
+  }
+  if (!doc) throw new Error('云端读取为空（文件 ' + (j.size || '?') + ' 字节，状态 ' + r.status + '）');
   return { sha: j.sha, doc };
 }
 async function ghPut(path, contentB64, sha, msg) {
@@ -1124,7 +1100,8 @@ async function ghFlush(p) {
     const doc = cur.doc;
     normalizeDoc(doc);
     applyPatchTo(doc, p);
-    // 防收缩：任何一次写回都不允许让某个集合变少（旧版外壳/离线副本也冲不掉别人的数据）
+    if (Array.isArray(doc.delIds) && doc.delIds.length) doc.users=doc.users.filter(u=>doc.delIds.indexOf(u.id)<0);
+    // 写回前先比一比，集合不许变少
     try{
       SYNC_ARR.forEach(k=>{
         if(!Array.isArray(cur.doc[k]) || !Array.isArray(doc[k])) return;
@@ -1179,10 +1156,17 @@ async function ghPoll(force) {
   try{
     const safe=JSON.parse(localStorage.getItem('qlz_safe')||'null');
     if(safe && safe.d && (safe.d.users||[]).length > (state.users||[]).length){
-      SYNC_ARR.forEach(k=>{ if(Array.isArray(safe.d[k])) state[k]=mergeArr(state[k]||[], {u:safe.d[k]}, k); });
+      const dead=new Set([].concat(state.delIds||[], safe.d.delIds||[]));
+      const su=(safe.d.users||[]).filter(u=>u && !dead.has(u.id));
+      if(su.length > (state.users||[]).length){
+      SYNC_ARR.forEach(k=>{ if(Array.isArray(safe.d[k])) state[k]=mergeArr(state[k]||[], {u:(k==='users'?su:safe.d[k])}, k); });
       SYNC_MSG.forEach(k=>{ const dd=safe.d[k]||{}; Object.keys(dd).forEach(c=>{ state[k]=state[k]||{}; state[k][c]=mergeArr(state[k][c]||[], {u:dd[c]}, k); }); });
-      DB.err='云端数据被冲空，正用本机备份补回';
+      if (Array.isArray(state.delIds) && state.delIds.length) {
+        state.users = (state.users || []).filter(x => state.delIds.indexOf(x.id) < 0);
+      }
+      DB.err='本机备份比云端多几条记录，已自动补回';
       try{ queueSync(); }catch(e){}
+      }
     }
   }catch(e){ }
 
@@ -1227,6 +1211,8 @@ async function ghPoll(force) {
   if (state.me && me()) { softRender(); if (typeof chatCtx !== 'undefined' && chatCtx) renderChat(); }
 }
 async function ghInit() {
+  // 没解锁就先别连，省得首页弹 401
+  if (!keyPoolReady) { DB.ready = false; DB.err = ''; return; }
   try {
     const cur = await ghRead();
     const doc = cur.doc;
@@ -1241,7 +1227,6 @@ async function ghInit() {
     if (doc && doc.users && doc.users.length) {
       state = normalizeDoc(Object.assign(doc, localAuth()));
       DB.last = snapshot();                     // 以云端旧数据为基线
-      if (state.wipeV !== WIPE_V) purgeUsers(state);   // 再清号，才能把删除推上去
       const u = findMine(state.users);
       if (u) setUid(u.id); else { state.me = null; state.regUid = null; }
     } else {
@@ -1366,7 +1351,6 @@ async function pullDoc(rev) {
   if (auth.me && !findMine(doc.users)) return;
   state = normalizeDoc(Object.assign(doc, auth));
   DB.last = snapshot();
-  if (state.wipeV !== WIPE_V) purgeUsers(state);
   const u = findMine(state.users);
   if (u) setUid(u.id); else { state.me = null; }
   DB.rev = rev;
@@ -1416,12 +1400,10 @@ async function cloudInit() {
         doc.users.push(localMe);
       }
     }
-    if (doc && doc.users && doc.users.length && doc.wipeV !== WIPE_V) { purgeUsers(doc); }
     if (doc && doc.users && doc.users.length) {
       state = normalizeDoc(Object.assign(doc, localAuth()));
       const u = findMine(state.users);
       if (u) setUid(u.id); else { state.me = null; state.regUid = null; }
-      if (doc.wipeV !== state.wipeV) { state.wipeV = WIPE_V; }
     } else {
       state = Object.assign(state, localAuth());
     }
@@ -1516,7 +1498,7 @@ function clearCloud() {
 }
 
 
-/* ---------- 角色整顿：只留季云知一位开发者 ---------- */
+/* 开发者只留一位 */
 function normalizeRoles() {
   if (!state.users || !state.users.length) return;
   if (state.rolesV >= 2) return;
@@ -1733,7 +1715,7 @@ function showAuth() {
   const reg = state.registered;
   $('#authNote').innerHTML = reg
     ? `本设备已注册账号「${esc((me() || state.users.find(u => u.id === state.regUid) || {}).name || '')}」。<br>请用微信登录继续，本帮会不发小号。`
-    : `本设备仅可注册一个账号，一经注册不可再开小号。<br>季云知，成为本帮会「开发者」。`;
+    : `本设备仅可注册一个账号，一经注册不可再开小号。<br>帮会仅设一位开发者，由首位注册者任之。`;
   $('#btnWechat').textContent = reg ? '微信登录' : '微信一键注册登录';
   auth.classList.remove('hidden');
 }
@@ -1848,7 +1830,7 @@ async function register(name, avatar) {
     role: 'member', friends: [], createdAt: Date.now(), visitsTotal: 0,
     wxId: 'wx_' + id, wxName: name
   };
-  // 只有「季云知」是开发者，其他人一律为成员
+  // 开发者只她一位，其余都是成员
   if (name.trim() === '季云知') u.role = 'developer';
   if (typeof getDevice === 'function') u.deviceId = getDevice();
   state.users.push(u);
@@ -1873,12 +1855,6 @@ async function register(name, avatar) {
       { id: uid('m'), from: 'u_hf', text: '今雨可为故雨？', time: Date.now() - 40000 }
     ];
   }
-
-  // 好友申请演示
-  state.reqs.unshift(
-    { id: uid('r'), from: 'u_hf', to: id, time: Date.now() - 1800000, status: 'pending' },
-    { id: uid('r'), from: 'u_dm', to: id, time: Date.now() - 900000, status: 'pending' }
-  );
 
   // 昨日榜单补一笔自己的数据
   const y = ymd(dayShift(-1));
@@ -1948,6 +1924,7 @@ function renderAll() {
   if (chatCtx) markRead(chatCtx.type === 'dm' ? 'dm' : 'group', chatCtx.id);
   renderTools(); renderDaily(); renderMoments(); renderPoem(); renderFriends(); renderDrawer();
   refreshUnreadUI();
+  watchReqs();
   $$('.tab-item').forEach(n => {
     const old = n.querySelector('.nav-dot'); if (old) old.remove();
   });
@@ -2486,9 +2463,9 @@ function addFriends(a, b) {
 
 function renderFriends() {
   const m = me();
-  const incoming = state.reqs.filter(r => r.to === m.id && r.status === 'pending');
-  const outgoing = state.reqs.filter(r => r.from === m.id && r.status !== 'pending').slice(0, 6);
-  const sentPending = state.reqs.filter(r => r.from === m.id && r.status === 'pending');
+  const incoming = state.reqs.filter(r => r.to === m.id && r.status === 'pending' && userById(r.from));
+  const outgoing = state.reqs.filter(r => r.from === m.id && r.status === 'accepted').slice(0, 6);
+  const sentPending = state.reqs.filter(r => r.from === m.id && r.status === 'pending' && userById(r.to));
   const friends = m.friends.map(id => userById(id)).filter(Boolean);
   const others = state.users.filter(u => u.id !== m.id);
 
@@ -2537,7 +2514,8 @@ function renderFriends() {
     sentPending.forEach(r => {
       const u = userById(r.to) || {};
       html += `<div class="friend-row"><img src="${avatarOf(u)}"><div class="f-main"><div class="f-name">${esc(u.name)}</div>
-        <div class="f-sub">等待对方验证 · ${fmtTime(r.time)}</div></div><span class="badge badge-wait">待验证</span></div>`;
+        <div class="f-sub">等待对方验证 · ${fmtTime(r.time)}</div></div>
+        <button class="btn-mini btn-ghost" style="width:auto;padding:6px 10px" onclick="withdrawReq('${r.id}')">撤回</button></div>`;
     });
     html += `</div>`;
   }
@@ -2586,9 +2564,25 @@ function decideReq(rid, yes) {
   if (r.status !== 'pending') return;
   if (yes) {
     r.status = 'accepted'; addFriends(r.from, r.to);
-    toast('已与「' + (userById(r.from) || {}).name + '」成为好友');
+    const nm = (userById(r.from) || {}).name || '对方';
+    toast('已与「' + nm + '」成为好友，直接开聊');
   } else { r.status = 'rejected'; toast('已拒绝该申请'); }
   saveState(); renderAll();
+  if (yes) { setTimeout(() => { try { renderAll(); openDM(r.from); } catch (e) { } }, 60); }
+}
+function withdrawReq(rid) {
+  const r = (state.reqs || []).find(x => x.id === rid);
+  if (!r) return;
+  // 记录不能删：删了本机干净，云端那条还在，下次同步又被顶回来
+  (state.reqs || []).forEach(x => {
+    if (x.from === state.me && x.to === r.to && x.status === 'pending') { x.status = 'withdrawn'; x.time = Date.now(); }
+  });
+  try {
+    const k = 'qlz_pend_' + state.me;
+    const arr = JSON.parse(localStorage.getItem(k) || '[]').filter(x => x !== r.to);
+    localStorage.setItem(k, JSON.stringify(arr));
+  } catch (e) { }
+  saveState(); renderAll(); toast('已撤回申请');
 }
 function processNpcReqs() {
   let changed = false;
@@ -2957,7 +2951,7 @@ function unreadTotal() {
   ((me() && me().friends) || []).forEach(fid => { if (userById(fid)) n += unreadOf('dm', fid); });
   const rm = readMap();
   const seenReq = rm['req'] || 0;
-  n += (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending' && (r.time || 0) > seenReq).length;
+  n += (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending' && userById(r.from) && (r.time || 0) > seenReq).length;
   return n;
 }
 function unreadChat() {
@@ -3015,16 +3009,42 @@ function maybeNotifyNative() {
   } catch (e) { }
 }
 
+function watchReqs() {
+  try {
+    if (!state.me) return;
+    const sk = 'qlz_req_seen_' + state.me;
+    let seen = []; try { seen = JSON.parse(localStorage.getItem(sk) || '[]'); } catch (e) { }
+    (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending' && userById(r.from)).forEach(r => {
+      if (seen.indexOf(r.id) > -1) return;
+      seen.push(r.id);
+      const u = userById(r.from) || { name: '故人' };
+      toast('「' + u.name + '」申请加你为好友，到好友页同意');
+      try { if (window.QLZNative && QLZNative.notifyMsg) QLZNative.notifyMsg('清平乐 · 醉清欢', u.name + ' 申请加你为好友', 1); } catch (e) { }
+    });
+    localStorage.setItem(sk, JSON.stringify(seen.slice(-100)));
+    const ak = 'qlz_req_acc_' + state.me;
+    let acc = []; try { acc = JSON.parse(localStorage.getItem(ak) || '[]'); } catch (e) { }
+    (state.reqs || []).filter(r => r.from === state.me && r.status === 'accepted').forEach(r => {
+      if (acc.indexOf(r.id) > -1) return;
+      acc.push(r.id);
+      const u = userById(r.to) || { name: '对方' };
+      toast('「' + u.name + '」通过了你的申请，现在可以私聊了');
+    });
+    localStorage.setItem(ak, JSON.stringify(acc.slice(-100)));
+  } catch (e) { }
+}
 function refreshUnreadUI() {
   if (!state.me) return;
   maybeNotifyNative();
   const n = unreadTotal();
+  const pend = (state.reqs || []).filter(r => r.to === state.me && r.status === 'pending' && userById(r.from)).length;
+  const badgeN = n > 0 ? n : pend;
   const tab = $('.tab-item[data-tab="friends"]');
   if (tab) {
     let b = tab.querySelector('.nav-badge');
     if (!b) { b = document.createElement('div'); b.className = 'nav-badge'; tab.appendChild(b); }
-    b.textContent = n > 99 ? '99+' : n;
-    b.style.display = n > 0 ? 'flex' : 'none';
+    b.textContent = badgeN > 99 ? '99+' : badgeN;
+    b.style.display = badgeN > 0 ? 'flex' : 'none';
   }
   document.title = (n > 0 ? '(' + (n > 99 ? '99+' : n) + ') ' : '') + '清平乐 · 醉清欢';
 }
