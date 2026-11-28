@@ -885,10 +885,15 @@ function findMine(users) {
 function normalizeDoc(doc) {
   ['users', 'posts', 'signups', 'polls', 'stats', 'notices', 'groups', 'reqs', 'flyflowers', 'updates', 'gnameReqs'].forEach(k => { if (!Array.isArray(doc[k])) doc[k] = []; });
   ['groupMsgs', 'dm', 'visits', 'likes'].forEach(k => { if (!doc[k] || typeof doc[k] !== 'object') doc[k] = {}; });
+  if (!Array.isArray(doc.delIds)) doc.delIds = [];      // 销号墓碑：被删的 id 记在这里，本机备份永远不许把它们复活
   if (!doc.rules || /^1\.\s*11月27日之前/.test(String(doc.rules).trim())) doc.rules = (typeof DEFAULT_RULES !== 'undefined' ? DEFAULT_RULES : '');
   if (doc.rolesV == null) doc.rolesV = 0;
   if (doc.wipeV == null) doc.wipeV = 0;
   if (typeof normalizeExtras === 'function') doc = normalizeExtras(doc);
+  // 墓碑生效：被合并/注销的账号 id 记在 delIds，任何读路径都不许让它们复活
+  if (Array.isArray(doc.delIds) && doc.delIds.length) {
+    doc.users = (doc.users || []).filter(u => doc.delIds.indexOf(u.id) < 0);
+  }
   return doc;
 }
 
@@ -902,6 +907,7 @@ function snapshot() {
   o.rules = state.rules || '';
   o.rolesV = state.rolesV || 0;
   o.wipeV = state.wipeV || 0;
+  o.delIds = state.delIds || [];
   return JSON.parse(JSON.stringify(o));
 }
 
@@ -949,6 +955,7 @@ function diffDoc(prev, next) {
   const sc = {};
   if (prev.rules !== next.rules && DB.rulesDirty) sc.rules = next.rules;   // 准则只由管理员主动保存时才推送，避免旧设备把它盖回去
   if (prev.rolesV !== next.rolesV) sc.rolesV = next.rolesV;
+  if ((prev.delIds || []).length !== (next.delIds || []).length) sc.delIds = next.delIds || [];
   if ((prev.wipeV || 0) !== (next.wipeV || 0)) sc.wipeV = next.wipeV || 0;
   if (Object.keys(sc).length) p.s = sc;
   return p;
@@ -1022,7 +1029,16 @@ function applyPatchTo(doc, p) {
       });
     });
   });
-  if (p.s) Object.assign(doc, p.s);
+  if (p.s) {
+    const sd = p.s.delIds;
+    delete p.s.delIds;
+    Object.assign(doc, p.s);
+    if (Array.isArray(sd)) doc.delIds = Array.from(new Set([].concat(doc.delIds || [], sd)));
+  }
+  // 墓碑生效：任何路径都不许让被删的账号回来
+  if (Array.isArray(doc.delIds) && doc.delIds.length) {
+    doc.users = (doc.users || []).filter(u => doc.delIds.indexOf(u.id) < 0);
+  }
   return doc;
 }
 
@@ -1139,6 +1155,7 @@ async function ghFlush(p) {
     const doc = cur.doc;
     normalizeDoc(doc);
     applyPatchTo(doc, p);
+    if (Array.isArray(doc.delIds) && doc.delIds.length) doc.users=doc.users.filter(u=>doc.delIds.indexOf(u.id)<0);
     // 防收缩：任何一次写回都不允许让某个集合变少（旧版外壳/离线副本也冲不掉别人的数据）
     try{
       SYNC_ARR.forEach(k=>{
@@ -1194,10 +1211,17 @@ async function ghPoll(force) {
   try{
     const safe=JSON.parse(localStorage.getItem('qlz_safe')||'null');
     if(safe && safe.d && (safe.d.users||[]).length > (state.users||[]).length){
-      SYNC_ARR.forEach(k=>{ if(Array.isArray(safe.d[k])) state[k]=mergeArr(state[k]||[], {u:safe.d[k]}, k); });
+      const dead=new Set([].concat(state.delIds||[], safe.d.delIds||[]));
+      const su=(safe.d.users||[]).filter(u=>u && !dead.has(u.id));
+      if(su.length > (state.users||[]).length){
+      SYNC_ARR.forEach(k=>{ if(Array.isArray(safe.d[k])) state[k]=mergeArr(state[k]||[], {u:(k==='users'?su:safe.d[k])}, k); });
       SYNC_MSG.forEach(k=>{ const dd=safe.d[k]||{}; Object.keys(dd).forEach(c=>{ state[k]=state[k]||{}; state[k][c]=mergeArr(state[k][c]||[], {u:dd[c]}, k); }); });
-      DB.err='云端数据被冲空，正用本机备份补回';
+      if (Array.isArray(state.delIds) && state.delIds.length) {
+        state.users = (state.users || []).filter(x => state.delIds.indexOf(x.id) < 0);
+      }
+      DB.err='本机备份比云端多几条记录，已自动补回';
       try{ queueSync(); }catch(e){}
+      }
     }
   }catch(e){ }
 
