@@ -2964,6 +2964,11 @@ function rateOK(kind){
 }
 function normalizeExtras(doc){
   ['updates','gnameReqs'].forEach(k=>{ if(!Array.isArray(doc[k])) doc[k]=[]; });
+  // 内置角色防丢：大雪、故雨总在册
+  if(!doc.users) doc.users=[];
+  npcUsers().forEach(n=>{
+    if(!doc.users.some(u=>u.seedKey===n.seedKey)) doc.users.push(n);
+  });
   // 只保留大群聊
   const main = (doc.groups||[]).find(g=>g.isMain);
   if(main){
@@ -3032,7 +3037,7 @@ function devStats(){
   const selfU=us.find(u=>u.id===state.me);
   if(selfU && !(selfU.lastSeen && now-selfU.lastSeen<5*60000)) online+=1;
   const week=us.filter(u=>u.lastSeen && now-u.lastSeen<7*86400000).length;
-  const total=us.length;
+  const total=us.filter(u=>!u.seedKey).length;
   return {online, week, total};
 }
 function requestRename(gid, name){
