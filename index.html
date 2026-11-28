@@ -794,7 +794,7 @@ if (!CLOUD.tokens.length && CLOUD.token) CLOUD.tokens = [CLOUD.token];
 CLOUD.token = CLOUD.tokens[0] || CLOUD.token || '';
 CLOUD.tokIdx = 0;
 // 十把密钥以口令加密后内置，明文不进页面；口令只口头告诉帮众
-const KEYS_BLOB = 'IL3cJJ8lR4JJcbELrwENwg==.GLW56aeVTkH6J35g.tVEFAAKX7vcTcYSrWbD0g4LOOW8SHdwDWzjHZKp75aELgnF8i3e+RsERukJA1MaB3d5Y/azcYKTsswtbxszH0CTt2bAL7zqv/CPnAEusK06yW+iJ/p8M/StlQ1946if/nTej9oXvI4NA4Sr6/lUET/N52eOfOzLLlMROE4EnD0Oc4NSwbHows2svUfofYq1JdqZyEAIPXQyoQ6tXUanxC9w0Xxyg5u0G8o2v/PtGULfBbN/aurMltQuX+AL/ENZYB2A5nEUYp2yAybuOQZmW9UmLryZv9PRmIeznIlt9ZGkT9BYdmRF3luBtqq58QLKBexy8Cc8lCi4QH78QM6N78O4mhs+0Mee4VB0GlUmGxHYMZdTZGbr83x0ngVfWTRd5k2iPNKsYTjINVz+CKZYQxOmAUETmU1wvMMSq0sCz1qcWp/HQE+LcgpQZ+FobuFm/+voAOSEftEmwmgflkKWYzwe5IK6BCe5upCYqnnO0erBlJ4kCclX+NOWU26sxILlpkjFDmhC2VnYBWsOawVM3vdpnL2pUH17XYIr+WvQ2D49YOc/dLGx8ZLpyYV1iIXgM47MtNtHDtrYVsdav3gWS9PjZTL9WPYY5ELM3ugXCu4uwaYkKstZADjWtKt1uV67V8pFvwwtQ+eTmExvej3B4pDGeAAkf7wFyupDEv4g01vbsyLYuRPn8jr/cFAXJhpTWjtIP1OLS1giW7fkQzkKxr9B6yQp/dTLjF03y2DMzCwzq3qolrZQ2g+15suapVCQyWAP6IC2Ug0Dx3ImPK+WeE9Ekq5lK6cCwremfoEQd9nIvnwuhWzDIa3QHyQooCxI3sg1H4qIGk1dWsJ4pjG9XkYez6BjZL2O+lAjmezbADfeICqpm4dOGCNu3Os05n3aLkvJZgaAy4qsRdxZPR6JZsiHgJSdwrln1Qqam5+Rw18dDJBqvtmmJ85gn2kaFFNytcuB18ZfH6ndO8LzE9TZ4x/rSzkmSWXHm+XQ0ydLVuKnxVdCoSfngSXC5GEfEU2zn99X9d0+uvzBosprQ7LVEZ7bp8dGD89N/NeMHprYSN6UXdZ1ybbVxfgbnjibFgM48vQhZFnuz1VXdADAAmCFtKIpcsfI8CbSqU4qHRIKp+GevwPyuPnGs48K07vHMX18xKMmDovSNQ2qxZvL3pCpjJx4Y4YWUHGoGbIOZSNWUN6NSr/3LlIi3Hyy7pQGDkjxwUWPnFo4Eo7L+4dghwTvcdUgNqTF198BzOd8GwqNhCBgyuZZVBiGCMX9Cg6EMlSsvrmuPPsSiGM7RCOm2qrFY9BYY8RyjC0VQ7T4=';
+const KEYS_BLOB = 'bwAsHXUiBzBA/6EchcUK9g==.IEfSC52LXtio42vV.Qye13PqnfvQI7JREGdR8RjdA573BWHbClAWUeHz96A+W217sQ2WNsG0HePMxDtR9WrtXoXVyeqifNXFyrQLrz2dU3KMC/nEame+3Dt5Z7qoWJmRr1mfS+Izb/O6BwfV9WhKSStZfrhK6XtVxaDMVIzbxN8iKDZZWiKpEz8zWHBMkbVLpBm+c0xjTPus/Av00dj4PA9Dlr8IE7NRk90t2cx9Bh9EJeqM20ayNVgwzgexiIEOSfTigELfv7k9CoA3Sxtsth82LHu62G5ysrtCECbXFU6+vCUPH42RX5MHpB/a+LjENv7ccZ/OiXflhSf0ZQpKNJgF16XhrYL+Kfp4nHwGJbxxKb3i/fMZ3+XuAZP4vaIHdumXyAkzdIHBxNGulfil555WrGUrXg1Gaz7QN968RbaPnxFJy5BSR65gDp+E4x6TKePKJG5WMGopJCRdMKo1M3bN1YZ68DhoC9D3k951AM0lkHsfx4p6Nf6lK6QLHncXPNJ+7khGTgD4LqZu+iSoIZBPHlkaSm7voxogFkeFZh8db7a2d6VRRZPU9ed8cOQ+F+HZBlaacuRln4cgQgybGvoLP66v36jG28KEIuXPmoKxUIKnI842BXk61VShRv1CDbnPCTvH9lXYVxY013uzQMGcsZWE1MS7+qPdN4PRzmIy9Jl1nvapEoPPIRyUvplaYqLv9lRoOLkC7GDbN/ojTDbbwSRdwRECSsD6RxLuw0d+51iqdGjpdlGWTAx6H1qXsgn5Nj9N2OS5pkBK/oIvD+5zYxGX1MfDogkCpbJEDez9KLQ43w3MsQgpLmnCXJllvQybxVGdsqYapsYSnJ0pKCpFcwXUm3zgsRXVWnsVztrw3Ww5W2HSzOEuWOiFbjO3eDJU/d9Eb7OTWpKiiqUcO6NuA78zBYQP3Mn4IETOaAqvgWmIN0VfEqH8I+mICAQEmcPTnW6uFalNx1FzkQBtAQZJ+u6rXg/CdvRFIwGlCAD6skADbSSjla3k5+ikVjIG42efQ4zRBq06UIJe6wQnhvLFGcf3wzfnPPsqXgh82nBjtFNSMCDeo6bpK/Br9WVRjA/Z4wXgGdtyhX8uHXlRBTG3+uxZ/QTK+9jeyE1AlnaIHP/+rVdpU6U5Jxj5SuoYbk3QZ5vzV4b7OvYrzRIkcq37IxvG8St5i2ay/V0Jw2iyYuc4NkZLl7S0We43JXWfakHF+ZMFG6ITOxJGiFF3ANJeIq7MxAGb0N258w0fkSNjbB4a8pDOhdtRhu3O8J+PUQan9ukdjmEhlyZzEVrnT5mU2VR1lxInQ1TDe9FuDmXBkMQSDZcE=';
 const keyPoolReady = (function(){
   try {
     const saved = JSON.parse(localStorage.getItem('qlz_keys') || '[]');
@@ -825,8 +825,8 @@ function askKeyPass() {
     <div id="kpMask" style="position:fixed;inset:0;z-index:900;background:rgba(30,36,32,.55);display:flex;align-items:center;justify-content:center;padding:22px">
       <div style="width:100%;max-width:340px;background:#fffdf5;border:1px solid rgba(66,56,40,.25);border-radius:3px;padding:18px">
         <div style="font-family:var(--serif);font-size:15px;letter-spacing:2px;color:#1e3b31;margin-bottom:8px">输入帮会口令</div>
-        <div style="font-size:12px;line-height:1.8;color:#6b6f66;margin-bottom:10px">口令解开内置于页面里的十把同步密钥，只在本机保存，不进云端。</div>
-        <input id="kpInput" type="password" autocomplete="off" style="width:100%;box-sizing:border-box;border:1px solid rgba(66,56,40,.25);border-radius:2px;padding:10px 12px;font-size:14px;background:#fff;outline:none">
+        <div style="font-size:12px;line-height:1.8;color:#6b6f66;margin-bottom:10px">口令是英文，全小写，解开内置的十把同步密钥，只在本机保存，不进云端。</div>
+        <input id="kpInput" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" type="text" autocomplete="off" style="width:100%;box-sizing:border-box;border:1px solid rgba(66,56,40,.25);border-radius:2px;padding:10px 12px;font-size:14px;background:#fff;outline:none">
         <div id="kpErr" style="font-size:11.5px;color:#9c3f34;min-height:16px;margin-top:6px"></div>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button id="kpOk" style="flex:1;border:none;border-radius:2px;padding:10px;background:#1e3b31;color:#f6efdd;font-size:14px;letter-spacing:2px">解锁进入</button>
@@ -844,7 +844,7 @@ function askKeyPass() {
       localStorage.setItem('qlz_keys', JSON.stringify(arr));
       err.style.color = '#2c5749'; err.textContent = '解锁成功，正在载入…';
       setTimeout(() => location.reload(), 600);
-    } catch (e) { err.textContent = '口令不对，或这串密钥已损坏'; }
+    } catch (e) { err.textContent = '口令不对（英文，区分大小写，别带空格）'; }
   };
 }
 const POLL_MS = 3000;
